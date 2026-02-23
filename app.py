@@ -26,16 +26,28 @@ st.set_page_config(page_title="RAG vs Agentic Retrieval", layout="wide")
 REQUIRE_AUTH = os.getenv("REQUIRE_AUTH", "false").lower() == "true"
 
 if REQUIRE_AUTH:
-    if not st.experimental_user.is_logged_in:
+    # Guard: st.experimental_user requires [auth] to be configured in secrets.
+    # If not yet set up, show a clear message instead of crashing.
+    try:
+        is_logged_in = st.experimental_user.is_logged_in
+    except AttributeError:
+        st.error(
+            "Authentication is enabled (`REQUIRE_AUTH=true`) but the `[auth]` "
+            "section is missing from your Streamlit secrets. "
+            "Add `[auth]`, `[auth.google]`, and a `redirect_uri` to continue."
+        )
+        st.stop()
+
+    if not is_logged_in:
         st.title("RAG vs Agentic Retrieval")
         st.markdown(
             "This demo compares **classic RAG** vs **agentic retrieval** on a live GitHub "
-            "portfolio knowledge base. Sign in with a trusted Google account to access it."
+            "portfolio knowledge base. Sign in with Google to access it."
         )
         st.login("google")
         st.stop()
 
-    # Allowlist check — add emails to secrets.toml under [allowed_emails]
+    # Allowlist check — add emails to secrets under allowed_emails
     allowed = st.secrets.get("allowed_emails", [])
     user_email = st.experimental_user.email or ""
     if allowed and user_email not in allowed:
@@ -82,7 +94,7 @@ st.caption("Compare classic RAG with agentic retrieval on the same knowledge bas
 with st.sidebar:
     # Auth info
     if REQUIRE_AUTH and st.experimental_user.is_logged_in:
-        st.caption(f"Signed in as **{st.experimental_user.email}**")
+        st.caption(f"👤 {st.experimental_user.email}")
         if st.button("Sign out", use_container_width=True):
             st.logout()
         st.divider()
