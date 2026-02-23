@@ -3,23 +3,91 @@ Streamlit app: RAG vs Agentic Retrieval — Side-by-Side Comparison.
 
 Run with:
     streamlit run app.py
+
+Auth:
+    - Enabled when REQUIRE_AUTH=true (used on Streamlit Community Cloud)
+    - Skipped locally for fast iteration
+    - Allowlist stored in st.secrets["allowed_emails"]
+
+Auto-ingest:
+    - On first run / cold start, if ChromaDB is empty it re-ingests from GitHub
+    - Subsequent runs use the cached DB
 """
 
+import os
 import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv()
 
+st.set_page_config(page_title="RAG vs Agentic Retrieval", layout="wide")
+
+# ── Authentication ────────────────────────────────────────────────────────────
+REQUIRE_AUTH = os.getenv("REQUIRE_AUTH", "false").lower() == "true"
+
+if REQUIRE_AUTH:
+    if not st.experimental_user.is_logged_in:
+        st.title("RAG vs Agentic Retrieval")
+        st.markdown(
+            "This demo compares **classic RAG** vs **agentic retrieval** on a live GitHub "
+            "portfolio knowledge base. Sign in with a trusted Google account to access it."
+        )
+        st.login("google")
+        st.stop()
+
+    # Allowlist check — add emails to secrets.toml under [allowed_emails]
+    allowed = st.secrets.get("allowed_emails", [])
+    user_email = st.experimental_user.email or ""
+    if allowed and user_email not in allowed:
+        st.error(
+            f"Access denied: **{user_email}** is not on the allowlist. "
+            "Contact the site owner to request access."
+        )
+        if st.button("Sign out"):
+            st.logout()
+        st.stop()
+
+# ── Knowledge base auto-ingest ────────────────────────────────────────────────
+@st.cache_resource(show_spinner=False)
+def ensure_knowledge_base() -> int:
+    """
+    Check ChromaDB on startup. If empty (cold start / first deploy),
+    run the full ingestion pipeline and return the chunk count.
+    """
+    from shared.vector_store import get_or_create_collection
+    col = get_or_create_collection()
+    if col.count() > 0:
+        return col.count()
+
+    # Cold start — ingest from GitHub
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent))
+    from data.fetch_readmes import main as ingest
+    ingest()
+    return get_or_create_collection().count()
+
+with st.spinner("🔍 Initialising knowledge base…"):
+    chunk_count = ensure_knowledge_base()
+
+# ── Deferred imports (after env loaded) ──────────────────────────────────────
 from rag.pipeline import run_rag_pipeline
 from agentic.agent import run_agentic_pipeline
 
-st.set_page_config(page_title="RAG vs Agentic Retrieval", layout="wide")
-
+# ── UI ────────────────────────────────────────────────────────────────────────
 st.title("RAG vs Agentic Retrieval")
 st.caption("Compare classic RAG with agentic retrieval on the same knowledge base")
 
 # Sidebar
 with st.sidebar:
+    # Auth info
+    if REQUIRE_AUTH and st.experimental_user.is_logged_in:
+        st.caption(f"Signed in as **{st.experimental_user.email}**")
+        if st.button("Sign out", use_container_width=True):
+            st.logout()
+        st.divider()
+
+    st.caption(f"Knowledge base: **{chunk_count:,} chunks**")
     st.header("Settings")
     n_results = st.slider("RAG: Chunks to retrieve", 1, 10, 5)
     max_iterations = st.slider("Agent: Max iterations", 1, 15, 8)
@@ -86,8 +154,10 @@ if st.button("Compare", type="primary", use_container_width=True) and question:
                 with st.expander("Retrieved Chunks"):
                     for chunk in rag_result.retrieved_chunks:
                         repo = chunk["metadata"].get("repo_name", "unknown")
+                        fpath = chunk["metadata"].get("file_path", "")
                         dist = round(chunk["distance"], 3)
-                        st.markdown(f"**{repo}** (distance: {dist})")
+                        label = f"{repo}/{fpath}" if fpath else repo
+                        st.markdown(f"**{label}** (distance: {dist})")
                         st.code(chunk["text"][:300], language="markdown")
                         st.divider()
 

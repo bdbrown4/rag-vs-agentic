@@ -9,13 +9,15 @@ Provides a thin wrapper around ChromaDB for:
 
 import chromadb
 from chromadb.config import Settings
+from pathlib import Path
 
 from shared.embeddings import get_embeddings_model
 
 
 _client: chromadb.ClientAPI | None = None
-COLLECTION_NAME = "github_readmes"
-PERSIST_DIR = ".chroma"
+COLLECTION_NAME = "github_portfolio"
+# Always resolve to <project_root>/.chroma, regardless of working directory
+PERSIST_DIR = str(Path(__file__).parent.parent / ".chroma")
 
 
 def get_client() -> chromadb.ClientAPI:

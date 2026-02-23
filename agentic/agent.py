@@ -16,8 +16,8 @@ import time
 from dataclasses import dataclass, field
 
 from langchain_openai import ChatOpenAI
-from langchain.agents import create_react_agent, AgentExecutor
-from langchain.prompts import PromptTemplate
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
+from langgraph.prebuilt import create_react_agent
 
 from agentic.tools import ALL_TOOLS
 
@@ -34,8 +34,7 @@ class AgenticResult:
     steps: list[str] = field(default_factory=list)
 
 
-AGENT_SYSTEM_PROMPT = PromptTemplate.from_template(
-    """You are a helpful assistant answering questions about a developer's GitHub portfolio.
+SYSTEM_PROMPT = """You are a helpful assistant answering questions about a developer's GitHub portfolio.
 You have access to tools that let you search a README knowledge base, get full documents,
 list available repos, and fetch live data from GitHub.
 
@@ -46,32 +45,7 @@ IMPORTANT: Think step-by-step about what information you need. You can:
 4. Fetch live GitHub data for real-time info (stars, issues, recent activity)
 
 Use multiple tools if needed to build a complete answer. If your first search
-doesn't find what you need, try rephrasing or looking at the full document.
-
-TOOLS:
-------
-You have access to the following tools:
-
-{tools}
-
-To use a tool, use the following format:
-
-Thought: I need to think about what to do next.
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-
-When you have enough information to answer, respond with:
-
-Thought: I now have enough information to answer.
-Final Answer: your complete answer here
-
-Begin!
-
-Question: {input}
-
-{agent_scratchpad}"""
-)
+doesn't find what you need, try rephrasing or looking at the full document."""
 
 
 def run_agentic_pipeline(
@@ -99,45 +73,46 @@ def run_agentic_pipeline(
     llm = ChatOpenAI(model=model, temperature=0)
 
     agent = create_react_agent(
-        llm=llm,
+        model=llm,
         tools=ALL_TOOLS,
-        prompt=AGENT_SYSTEM_PROMPT,
-    )
-
-    executor = AgentExecutor(
-        agent=agent,
-        tools=ALL_TOOLS,
-        verbose=verbose,
-        max_iterations=max_iterations,
-        return_intermediate_steps=True,
-        handle_parsing_errors=True,
+        prompt=SYSTEM_PROMPT,
     )
 
     # Run the agent
-    result = executor.invoke({"input": question})
+    result = agent.invoke(
+        {"messages": [HumanMessage(content=question)]},
+        config={"recursion_limit": max_iterations * 2 + 1},
+    )
 
-    # Extract trace information
-    answer = result.get("output", "No answer produced.")
-    intermediate_steps = result.get("intermediate_steps", [])
+    messages = result.get("messages", [])
 
+    # Parse messages to extract answer, tool calls, and trace steps
     llm_calls = 0
-    for action, observation in intermediate_steps:
-        llm_calls += 1
-        tool_name = action.tool
-        tool_input = action.tool_input
-        steps.append(f"THOUGHT: Agent decided to use '{tool_name}'")
-        steps.append(f"ACTION: {tool_name}({tool_input})")
-        steps.append(f"OBSERVATION: {str(observation)[:200]}...")
+    answer = "No answer produced."
 
-        tool_calls.append({
-            "tool": tool_name,
-            "input": tool_input,
-            "output_preview": str(observation)[:200],
-        })
+    for msg in messages:
+        if isinstance(msg, AIMessage):
+            llm_calls += 1
+            # If this AI message has tool calls, record them as steps
+            if msg.tool_calls:
+                for tc in msg.tool_calls:
+                    steps.append(f"THOUGHT: Agent decided to use '{tc['name']}'")
+                    steps.append(f"ACTION: {tc['name']}({tc['args']})")
+            else:
+                # Final answer — last AIMessage without tool calls
+                answer = msg.content
+                steps.append(f"FINAL ANSWER: Generated response after {len(tool_calls)} tool calls")
 
-    # +1 for the final answer generation
-    llm_calls += 1
-    steps.append(f"FINAL ANSWER: Generated response after {len(intermediate_steps)} tool calls")
+        elif isinstance(msg, ToolMessage):
+            observation_preview = str(msg.content)[:200]
+            steps.append(f"OBSERVATION: {observation_preview}...")
+
+            # Match this observation back to the most recent AI tool call
+            tool_calls.append({
+                "tool": msg.name,
+                "input": "",   # args captured above in AIMessage
+                "output_preview": observation_preview,
+            })
 
     elapsed = time.time() - start
 

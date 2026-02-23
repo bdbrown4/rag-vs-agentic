@@ -7,7 +7,7 @@ This module handles:
 3. Generating embeddings via OpenAI text-embedding-3-small
 """
 
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 
 
