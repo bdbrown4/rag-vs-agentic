@@ -1,0 +1,76 @@
+{
+  "questions": [
+    {
+      "id": 1,
+      "tier": "simple",
+      "question": "What is the portfolio-site project about?",
+      "notes": "Direct lookup — both should handle fine"
+    },
+    {
+      "id": 2,
+      "tier": "simple",
+      "question": "What language is the pokemon-api written in?",
+      "notes": "Single fact retrieval"
+    },
+    {
+      "id": 3,
+      "tier": "simple",
+      "question": "What does the crypto-web-component do?",
+      "notes": "Direct lookup from one repo README"
+    },
+    {
+      "id": 4,
+      "tier": "simple",
+      "question": "What framework does the shopping-list-t3 project use?",
+      "notes": "Single repo, single fact"
+    },
+    {
+      "id": 5,
+      "tier": "multi-hop",
+      "question": "Which projects use Angular, and how do they differ in purpose?",
+      "notes": "Requires finding multiple repos, comparing them"
+    },
+    {
+      "id": 6,
+      "tier": "multi-hop",
+      "question": "How does the developer's experience with Kotlin differ between the NasaPictureOfTheDay and TodoApp projects?",
+      "notes": "Cross-document comparison requiring both READMEs"
+    },
+    {
+      "id": 7,
+      "tier": "multi-hop",
+      "question": "What backend technologies has the developer used across all projects?",
+      "notes": "Requires aggregating info from multiple repos"
+    },
+    {
+      "id": 8,
+      "tier": "multi-hop",
+      "question": "Compare the authentication approaches used in MEANAuthApp vs MEANAuthAppAngular.",
+      "notes": "Must retrieve and compare two specific repos"
+    },
+    {
+      "id": 9,
+      "tier": "ambiguous",
+      "question": "What should I look at if I want to see this developer's best work?",
+      "notes": "Subjective — agent can check stars, recency, descriptions"
+    },
+    {
+      "id": 10,
+      "tier": "ambiguous",
+      "question": "Is this developer experienced enough for a full-stack role?",
+      "notes": "Requires synthesizing across many repos and technologies"
+    },
+    {
+      "id": 11,
+      "tier": "ambiguous",
+      "question": "What areas could this developer improve in based on their portfolio?",
+      "notes": "Requires broad analysis — agent can explore, RAG gets noisy"
+    },
+    {
+      "id": 12,
+      "tier": "multi-hop",
+      "question": "Which project has the most stars, and what is it about?",
+      "notes": "Agent can use live GitHub API; RAG only sees static READMEs"
+    }
+  ]
+}

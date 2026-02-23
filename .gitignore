@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.chroma/
+data/*.json
+data/*.md
+*.egg-info/
+dist/
+build/
+.streamlit/
