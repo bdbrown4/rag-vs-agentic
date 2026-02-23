@@ -32,9 +32,8 @@ if REQUIRE_AUTH:
         is_logged_in = st.experimental_user.is_logged_in
     except AttributeError:
         st.error(
-            "Authentication is enabled (`REQUIRE_AUTH=true`) but the `[auth]` "
-            "section is missing from your Streamlit secrets. "
-            "Add `[auth]`, `[auth.google]`, and a `redirect_uri` to continue."
+            "**Streamlit version too old.** `st.login()` requires Streamlit ≥ 1.41. "
+            "Check that `requirements.txt` specifies `streamlit>=1.41.0` and redeploy."
         )
         st.stop()
 
