@@ -14,11 +14,45 @@ Auto-ingest:
     - Subsequent runs use the cached DB
 """
 
+import json
 import os
+from pathlib import Path
+
 import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# ── Dynamic allowlist helpers ─────────────────────────────────────────────────
+_ALLOWED_EMAILS_PATH = Path(__file__).parent / "data" / "allowed_emails.json"
+
+
+def _load_dynamic_emails() -> list[str]:
+    try:
+        if _ALLOWED_EMAILS_PATH.exists():
+            return json.loads(_ALLOWED_EMAILS_PATH.read_text())
+    except Exception:
+        pass
+    return []
+
+
+def _save_dynamic_emails(emails: list[str]) -> None:
+    _ALLOWED_EMAILS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _ALLOWED_EMAILS_PATH.write_text(json.dumps(sorted(set(emails))))
+
+
+def _get_all_allowed_emails() -> list[str]:
+    static = list(st.secrets.get("allowed_emails", []))
+    dynamic = _load_dynamic_emails()
+    return list(set(static + dynamic))
+
+
+def _is_admin(email: str) -> bool:
+    admin = st.secrets.get("admin_email", "")
+    if not admin:
+        allowed = list(st.secrets.get("allowed_emails", []))
+        admin = allowed[0] if allowed else ""
+    return bool(email and email == admin)
 
 st.set_page_config(page_title="RAG vs Agentic Retrieval", layout="wide")
 
@@ -50,8 +84,8 @@ if REQUIRE_AUTH:
         st.login("google")
         st.stop()
 
-    # Allowlist check — add emails to secrets under allowed_emails
-    allowed = st.secrets.get("allowed_emails", [])
+    # Allowlist check — merges secrets list + dynamically added emails
+    allowed = _get_all_allowed_emails()
     user_email = _user.email or ""
     if allowed and user_email not in allowed:
         st.error(
@@ -82,7 +116,7 @@ def ensure_knowledge_base() -> int:
     ingest()
     return get_or_create_collection().count()
 
-with st.spinner("🔍 Initialising knowledge base…"):
+with st.spinner("🔍 Initializing knowledge base — first load fetches & embeds your GitHub repos (may take ~60s on cold start)…"):
     chunk_count = ensure_knowledge_base()
 
 # ── Deferred imports (after env loaded) ──────────────────────────────────────
@@ -103,6 +137,48 @@ with st.sidebar:
             if st.button("Sign out", use_container_width=True):
                 st.logout()
             st.divider()
+
+            # ── Admin panel ────────────────────────────────────────────
+            if _is_admin(_u.email):
+                with st.expander("⚙️ Admin", expanded=False):
+                    st.markdown("**Allowed emails**")
+                    dynamic_emails = _load_dynamic_emails()
+                    static_emails = list(st.secrets.get("allowed_emails", []))
+
+                    # Show current list
+                    all_emails = sorted(set(static_emails + dynamic_emails))
+                    for em in all_emails:
+                        col_em, col_rm = st.columns([4, 1])
+                        tag = " _(secrets)_" if em in static_emails else ""
+                        col_em.markdown(f"`{em}`{tag}")
+                        if em not in static_emails:
+                            if col_rm.button("✕", key=f"rm_{em}"):
+                                dynamic_emails = [e for e in dynamic_emails if e != em]
+                                _save_dynamic_emails(dynamic_emails)
+                                st.rerun()
+
+                    # Add new email
+                    new_email = st.text_input("Add email", placeholder="user@example.com", key="new_email_input", label_visibility="collapsed")
+                    if st.button("Add", use_container_width=True) and new_email.strip():
+                        updated = list(set(dynamic_emails + [new_email.strip().lower()]))
+                        _save_dynamic_emails(updated)
+                        st.success(f"Added {new_email.strip()}")
+                        st.rerun()
+
+                    st.caption("_Emails added here persist until the app restarts. For permanent access, add to Streamlit secrets._")
+
+                    st.divider()
+                    st.markdown("**Knowledge base**")
+                    if st.button("🔄 Refresh (re-ingest GitHub)", use_container_width=True):
+                        from shared.vector_store import get_client, COLLECTION_NAME
+                        try:
+                            get_client().delete_collection(COLLECTION_NAME)
+                        except Exception:
+                            pass
+                        ensure_knowledge_base.clear()
+                        st.rerun()
+
+                st.divider()
 
     st.caption(f"Knowledge base: **{chunk_count:,} chunks**")
     st.header("Settings")
