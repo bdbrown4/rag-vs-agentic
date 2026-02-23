@@ -39,50 +39,73 @@ TEXT_EXTENSIONS = {
     # Code
     ".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".kt", ".kts",
     ".go", ".rs", ".c", ".cpp", ".h", ".hpp", ".cs", ".rb", ".php",
-    ".swift", ".dart", ".lua", ".sh", ".bash", ".bat", ".ps1",
+    ".swift", ".dart", ".lua", ".sh", ".bash", ".ps1",
     ".sql", ".r", ".scala", ".zig", ".ex", ".exs", ".clj",
     # Web / markup
     ".html", ".htm", ".css", ".scss", ".sass", ".less",
-    ".xml", ".svg", ".vue", ".svelte", ".astro",
-    # Config / data
-    ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".env.example",
-    ".conf", ".properties",
+    ".vue", ".svelte", ".astro",
+    # Config / data (only meaningful ones — not every .json is useful)
+    ".yaml", ".yml", ".toml", ".env.example",
+    ".prisma", ".proto", ".graphql", ".gql",
     # Docs
     ".md", ".mdx", ".txt", ".rst", ".adoc",
-    # Build / project
-    ".gradle", ".cmake", ".makefile",
-    ".dockerfile",
-    ".tf", ".hcl",
-    # Misc
-    ".graphql", ".gql", ".prisma", ".proto",
+    # Build / infra
+    ".gradle", ".tf", ".hcl", ".dockerfile",
 }
 
 # Exact filenames we always want (no extension match needed)
 TEXT_FILENAMES = {
     "Dockerfile", "Makefile", "CMakeLists.txt", "Procfile",
     "Gemfile", "Rakefile", "Justfile", "Vagrantfile",
-    ".gitignore", ".dockerignore", ".eslintrc", ".prettierrc",
-    "go.mod", "go.sum",
+    ".gitignore", ".dockerignore",
+    "go.mod",
+    "package.json", "pyproject.toml", "Cargo.toml",
+    "next.config.js", "next.config.mjs", "next.config.ts",
+    "vite.config.js", "vite.config.ts",
+    "tailwind.config.js", "tailwind.config.ts",
+    "webpack.config.js", "webpack.config.ts",
+    ".env.example",
 }
 
 # Directories to skip entirely
 SKIP_DIRS = {
+    # Dependencies / build output
     "node_modules", ".next", ".nuxt", "dist", "build", "out",
-    "__pycache__", ".git", ".idea", ".vscode", ".gradle",
+    "__pycache__", ".git", ".idea", ".vscode",
     "vendor", "target", ".dart_tool", ".pub-cache",
     "Pods", ".build", "DerivedData",
     "bin", "obj", ".terraform",
+    # Gradle internals (the wrapper JARs, caches — not useful for RAG)
+    ".gradle", "gradle",
+    # CI / tooling config dirs
+    ".github", ".circleci", ".husky", ".changeset",
+    # Test artifacts
+    "coverage", "__fixtures__", "__mocks__", "e2e",
+    # Generated / minified assets
+    "generated", "gen", "proto_generated",
 }
 
-# Files to always skip
+# Files to always skip (exact filename match)
 SKIP_FILES = {
+    # Lockfiles
     "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
     "composer.lock", "Gemfile.lock", "Cargo.lock",
-    "poetry.lock", "Pipfile.lock",
+    "poetry.lock", "Pipfile.lock", "go.sum",
+    # Gradle wrappers (binary shell scripts, not informative)
+    "gradlew", "gradlew.bat",
+    # Boilerplate build / linting configs (auto-generated, rarely customised)
+    "angular.json",
+    "karma.conf.js",
+    "babel.config.js", "babel.config.cjs", "babel.config.mjs",
+    "postcss.config.js", "postcss.config.cjs", "postcss.config.mjs",
+    "jest.config.js", "jest.config.ts", "jest.config.cjs",
+    ".eslintignore", ".npmignore", ".prettierignore",
+    # tsconfig variants that are just framework boilerplate
+    "tsconfig.app.json", "tsconfig.spec.json", "tsconfig.node.json",
 }
 
 MAX_FILE_SIZE_BYTES = 50_000  # Skip files larger than 50 KB
-MAX_FILES_PER_REPO = 60  # Cap per repo to stay fast and under rate limits
+MAX_FILES_PER_REPO = 250      # Raised — smart filtering keeps noise low
 
 
 def _headers() -> dict:
