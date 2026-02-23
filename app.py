@@ -40,13 +40,14 @@ if REQUIRE_AUTH:
             "This demo compares **classic RAG** vs **agentic retrieval** on a live GitHub "
             "portfolio knowledge base. Sign in with Google to access it."
         )
-        try:
-            st.login("google")
-        except Exception:
+        auth_configured = "auth" in st.secrets
+        if not auth_configured:
             st.error(
                 "Google authentication is not configured for this deployment. "
                 "Add an `[auth]` section with your Google OAuth credentials to the app secrets."
             )
+            st.stop()
+        st.login("google")
         st.stop()
 
     # Allowlist check — add emails to secrets under allowed_emails
