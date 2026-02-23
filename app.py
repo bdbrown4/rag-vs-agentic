@@ -28,13 +28,13 @@ REQUIRE_AUTH = os.getenv("REQUIRE_AUTH", "false").lower() == "true"
 if REQUIRE_AUTH:
     # Guard: st.experimental_user requires [auth] to be configured in secrets.
     # If not yet set up, show a clear message instead of crashing.
-    try:
-        is_logged_in = st.user.is_logged_in
-    except AttributeError:
-        st.error("**Streamlit version too old.** `st.login()` requires Streamlit ≥ 1.41.")
+    # Support both st.user (≥1.41) and st.experimental_user (older)
+    _user = getattr(st, "user", None) or getattr(st, "experimental_user", None)
+    if _user is None or not hasattr(_user, "is_logged_in"):
+        st.error("This Streamlit version does not support authentication. Contact the site owner.")
         st.stop()
 
-    if not is_logged_in:
+    if not _user.is_logged_in:
         st.title("RAG vs Agentic Retrieval")
         st.markdown(
             "This demo compares **classic RAG** vs **agentic retrieval** on a live GitHub "
@@ -45,7 +45,7 @@ if REQUIRE_AUTH:
 
     # Allowlist check — add emails to secrets under allowed_emails
     allowed = st.secrets.get("allowed_emails", [])
-    user_email = st.user.email or ""
+    user_email = _user.email or ""
     if allowed and user_email not in allowed:
         st.error(
             f"Access denied: **{user_email}** is not on the allowlist. "
@@ -89,11 +89,13 @@ st.caption("Compare classic RAG with agentic retrieval on the same knowledge bas
 # Sidebar
 with st.sidebar:
     # Auth info
-    if REQUIRE_AUTH and st.user.is_logged_in:
-        st.caption(f"👤 {st.user.email}")
-        if st.button("Sign out", use_container_width=True):
-            st.logout()
-        st.divider()
+    if REQUIRE_AUTH:
+        _u = getattr(st, "user", None) or getattr(st, "experimental_user", None)
+        if _u and getattr(_u, "is_logged_in", False):
+            st.caption(f"👤 {_u.email}")
+            if st.button("Sign out", use_container_width=True):
+                st.logout()
+            st.divider()
 
     st.caption(f"Knowledge base: **{chunk_count:,} chunks**")
     st.header("Settings")
