@@ -29,12 +29,9 @@ if REQUIRE_AUTH:
     # Guard: st.experimental_user requires [auth] to be configured in secrets.
     # If not yet set up, show a clear message instead of crashing.
     try:
-        is_logged_in = st.experimental_user.is_logged_in
+        is_logged_in = st.user.is_logged_in
     except AttributeError:
-        st.error(
-            "**Streamlit version too old.** `st.login()` requires Streamlit ≥ 1.41. "
-            "Check that `requirements.txt` specifies `streamlit>=1.41.0` and redeploy."
-        )
+        st.error("**Streamlit version too old.** `st.login()` requires Streamlit ≥ 1.41.")
         st.stop()
 
     if not is_logged_in:
@@ -48,7 +45,7 @@ if REQUIRE_AUTH:
 
     # Allowlist check — add emails to secrets under allowed_emails
     allowed = st.secrets.get("allowed_emails", [])
-    user_email = st.experimental_user.email or ""
+    user_email = st.user.email or ""
     if allowed and user_email not in allowed:
         st.error(
             f"Access denied: **{user_email}** is not on the allowlist. "
@@ -92,8 +89,8 @@ st.caption("Compare classic RAG with agentic retrieval on the same knowledge bas
 # Sidebar
 with st.sidebar:
     # Auth info
-    if REQUIRE_AUTH and st.experimental_user.is_logged_in:
-        st.caption(f"👤 {st.experimental_user.email}")
+    if REQUIRE_AUTH and st.user.is_logged_in:
+        st.caption(f"👤 {st.user.email}")
         if st.button("Sign out", use_container_width=True):
             st.logout()
         st.divider()
