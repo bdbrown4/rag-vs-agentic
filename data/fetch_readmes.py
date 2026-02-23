@@ -239,10 +239,10 @@ def build_documents(repos: list[dict], log_fn=print) -> list[dict]:
         text_files.sort(key=_sort_key)
 
         if len(text_files) > MAX_FILES_PER_REPO:
-            log_fn(f"**{repo['name']}** — {len(text_files)}/{len(files)} eligible files, capped to {MAX_FILES_PER_REPO}")
+            log_fn(f"**{repo['name']}** — {len(text_files)} eligible of {len(files)} total, capped to {MAX_FILES_PER_REPO}")
             text_files = text_files[:MAX_FILES_PER_REPO]
         else:
-            log_fn(f"**{repo['name']}** — {len(text_files)}/{len(files)} files to ingest")
+            log_fn(f"**{repo['name']}** — ingesting {len(text_files)} of {len(files)} total ({len(files) - len(text_files)} filtered out)")
 
         repo_file_count = 0
         for file_info in text_files:
