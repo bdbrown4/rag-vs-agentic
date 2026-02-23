@@ -197,13 +197,12 @@ def fetch_file_content(repo_full_name: str, file_path: str) -> str | None:
         return None  # Binary file slipped through
 
 
-def build_documents(repos: list[dict]) -> list[dict]:
+def build_documents(repos: list[dict], log_fn=print) -> list[dict]:
     """Build document objects from repos + all their source files."""
     documents = []
     total_files = 0
 
     for repo in repos:
-        print(f"\n  [{repo['name']}] Fetching file tree...", end=" ")
         files = fetch_file_tree(repo)
         text_files = [f for f in files if _should_include_file(f["path"], f["size"])]
 
@@ -217,10 +216,10 @@ def build_documents(repos: list[dict]) -> list[dict]:
         text_files.sort(key=_sort_key)
 
         if len(text_files) > MAX_FILES_PER_REPO:
-            print(f"{len(text_files)}/{len(files)} eligible, capped to {MAX_FILES_PER_REPO}")
+            log_fn(f"**{repo['name']}** — {len(text_files)}/{len(files)} eligible files, capped to {MAX_FILES_PER_REPO}")
             text_files = text_files[:MAX_FILES_PER_REPO]
         else:
-            print(f"{len(text_files)}/{len(files)} files to ingest")
+            log_fn(f"**{repo['name']}** — {len(text_files)}/{len(files)} files to ingest")
 
         repo_file_count = 0
         for file_info in text_files:
@@ -264,7 +263,7 @@ def build_documents(repos: list[dict]) -> list[dict]:
             repo_file_count += 1
 
         total_files += repo_file_count
-        print(f"    Fetched {repo_file_count} files")
+        log_fn(f"  ↳ fetched {repo_file_count} files")
 
         # Small delay to stay under rate limits
         time.sleep(0.1)
@@ -272,31 +271,29 @@ def build_documents(repos: list[dict]) -> list[dict]:
     return documents
 
 
-def main():
+def main(log_fn=print):
     """Fetch all source files, chunk, embed, and store in ChromaDB."""
-    print(f"\n=== Fetching repos for {GITHUB_USERNAME} ===\n")
+    log_fn(f"--- Fetching repos for **{GITHUB_USERNAME}** ---")
     repos = fetch_repos()
-    print(f"Found {len(repos)} original (non-forked) repos.")
+    log_fn(f"Found **{len(repos)}** original (non-forked) repos.")
 
-    print("\n=== Fetching source files ===")
-    documents = build_documents(repos)
-    print(f"\nFetched {len(documents)} files across all repos.\n")
+    log_fn("--- Fetching source files ---")
+    documents = build_documents(repos, log_fn=log_fn)
+    log_fn(f"Fetched **{len(documents)}** files across all repos.")
 
     # Save raw documents for reference
     data_dir = Path(__file__).parent
     with open(data_dir / "documents.json", "w", encoding="utf-8") as f:
         json.dump(documents, f, indent=2, ensure_ascii=False)
-    print(f"Saved raw documents to {data_dir / 'documents.json'}")
 
     # Chunk and embed
-    print("\n=== Chunking documents ===\n")
+    log_fn("--- Chunking documents ---")
     chunks = chunk_documents(documents)
-    print(f"Created {len(chunks)} chunks from {len(documents)} files.\n")
+    log_fn(f"Created **{len(chunks)}** chunks from **{len(documents)}** files.")
 
-    print("=== Embedding and storing in ChromaDB ===\n")
+    log_fn("--- Embedding and storing in ChromaDB (slowest step) ---")
     count = add_documents(chunks)
-    print(f"Stored {count} chunks in ChromaDB.\n")
-    print("Done! Vector store is ready.")
+    log_fn(f"✅ Stored **{count}** chunks. Vector store is ready.")
 
 
 if __name__ == "__main__":

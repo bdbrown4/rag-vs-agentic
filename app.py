@@ -97,27 +97,25 @@ if REQUIRE_AUTH:
         st.stop()
 
 # ── Knowledge base auto-ingest ────────────────────────────────────────────────
-@st.cache_resource(show_spinner=False)
-def ensure_knowledge_base() -> int:
-    """
-    Check ChromaDB on startup. If empty (cold start / first deploy),
-    run the full ingestion pipeline and return the chunk count.
-    """
+if "kb_chunk_count" not in st.session_state:
     from shared.vector_store import get_or_create_collection
-    col = get_or_create_collection()
-    if col.count() > 0:
-        return col.count()
+    _col = get_or_create_collection()
+    if _col.count() > 0:
+        # Warm — DB already populated
+        st.session_state.kb_chunk_count = _col.count()
+    else:
+        # Cold start — ingest live with visible progress
+        with st.status("🔍 Initializing knowledge base…", expanded=True) as _status:
+            from data.fetch_readmes import main as _ingest
+            _ingest(log_fn=st.write)
+            st.session_state.kb_chunk_count = get_or_create_collection().count()
+            _status.update(
+                label=f"✅ Knowledge base ready — {st.session_state.kb_chunk_count:,} chunks",
+                state="complete",
+                expanded=False,
+            )
 
-    # Cold start — ingest from GitHub
-    import sys
-    from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).parent))
-    from data.fetch_readmes import main as ingest
-    ingest()
-    return get_or_create_collection().count()
-
-with st.spinner("🔍 Initializing knowledge base — first load fetches & embeds your GitHub repos (may take ~60s on cold start)…"):
-    chunk_count = ensure_knowledge_base()
+chunk_count: int = st.session_state.kb_chunk_count
 
 # ── Deferred imports (after env loaded) ──────────────────────────────────────
 from rag.pipeline import run_rag_pipeline
@@ -175,7 +173,7 @@ with st.sidebar:
                             get_client().delete_collection(COLLECTION_NAME)
                         except Exception:
                             pass
-                        ensure_knowledge_base.clear()
+                        del st.session_state["kb_chunk_count"]
                         st.rerun()
 
                 st.divider()
