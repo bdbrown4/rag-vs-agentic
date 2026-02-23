@@ -315,7 +315,7 @@ def main(log_fn=print):
     log_fn(f"Created **{len(chunks)}** chunks from **{len(documents)}** files.")
 
     log_fn("--- Embedding and storing in ChromaDB (slowest step) ---")
-    count = add_documents(chunks)
+    count = add_documents(chunks, log_fn=log_fn)
     log_fn(f"✅ Stored **{count}** chunks. Vector store is ready.")
 
 

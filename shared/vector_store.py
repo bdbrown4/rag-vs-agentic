@@ -37,13 +37,17 @@ def get_or_create_collection(name: str = COLLECTION_NAME) -> chromadb.Collection
     )
 
 
-def add_documents(chunks: list[dict], collection_name: str = COLLECTION_NAME) -> int:
+CHROMA_MAX_BATCH = 5000  # ChromaDB hard limit is 5461; stay safely under it
+
+
+def add_documents(chunks: list[dict], collection_name: str = COLLECTION_NAME, log_fn=None) -> int:
     """
-    Embed and add document chunks to ChromaDB.
+    Embed and add document chunks to ChromaDB in batches.
 
     Args:
         chunks: List of dicts with 'id', 'text', and 'metadata'.
         collection_name: Target collection name.
+        log_fn: Optional callable for progress messages.
 
     Returns:
         Number of chunks added.
@@ -54,22 +58,28 @@ def add_documents(chunks: list[dict], collection_name: str = COLLECTION_NAME) ->
     collection = get_or_create_collection(collection_name)
     embeddings_model = get_embeddings_model()
 
-    texts = [c["text"] for c in chunks]
-    ids = [c["id"] for c in chunks]
-    metadatas = [c["metadata"] for c in chunks]
+    total = 0
+    for i in range(0, len(chunks), CHROMA_MAX_BATCH):
+        batch = chunks[i : i + CHROMA_MAX_BATCH]
+        texts = [c["text"] for c in batch]
+        ids = [c["id"] for c in batch]
+        metadatas = [c["metadata"] for c in batch]
 
-    # Generate embeddings via OpenAI
-    embeddings = embeddings_model.embed_documents(texts)
+        if log_fn:
+            end = min(i + CHROMA_MAX_BATCH, len(chunks))
+            log_fn(f"  Embedding & storing chunks {i + 1}\u2013{end} of {len(chunks)}…")
 
-    # Upsert into ChromaDB
-    collection.upsert(
-        ids=ids,
-        documents=texts,
-        embeddings=embeddings,
-        metadatas=metadatas,
-    )
+        embeddings = embeddings_model.embed_documents(texts)
 
-    return len(chunks)
+        collection.upsert(
+            ids=ids,
+            documents=texts,
+            embeddings=embeddings,
+            metadatas=metadatas,
+        )
+        total += len(batch)
+
+    return total
 
 
 def query_similar(
