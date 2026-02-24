@@ -114,14 +114,16 @@ def run_agentic_pipeline(
                 steps.append(f"FINAL ANSWER: Generated response after {len(tool_calls)} tool calls")
 
         elif isinstance(msg, ToolMessage):
-            observation_preview = str(msg.content)[:200]
+            full_output = str(msg.content)
+            observation_preview = full_output[:200]
             steps.append(f"OBSERVATION: {observation_preview}...")
 
             # Match this observation back to the most recent AI tool call
             tool_calls.append({
                 "tool": msg.name,
                 "input": "",   # args captured above in AIMessage
-                "output_preview": observation_preview,
+                "output_preview": observation_preview,  # display only
+                "output_full": full_output,             # full text for RAGAS context
             })
 
     elapsed = time.time() - start

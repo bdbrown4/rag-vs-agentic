@@ -124,8 +124,12 @@ def _run_agentic(question: str, max_iterations: int = 8) -> dict:
     """
     from agentic.agent import run_agentic_pipeline
     result = run_agentic_pipeline(question, max_iterations=max_iterations, verbose=False)
-    # Use tool output previews as the context that informed the answer
-    contexts = [tc.get("output_preview", "") for tc in result.tool_calls] or ["(no tools called)"]
+    # Use full tool outputs as the context that informed the answer.
+    # Falls back to output_preview (truncated) if full text wasn't captured.
+    contexts = [
+        tc.get("output_full") or tc.get("output_preview", "")
+        for tc in result.tool_calls
+    ] or ["(no tools called)"]
     return {
         "question": question,
         "answer": result.answer,

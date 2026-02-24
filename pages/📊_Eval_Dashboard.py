@@ -118,6 +118,12 @@ def _render_summary_metrics(df: pd.DataFrame):
 
         Scores are 0–1. A well-performing pipeline should score **> 0.7** across all three.
         The delta on agent metrics shows Agent minus RAG — positive means the agent did better.
+
+        > ⚠️ **Watch out for the Faithful Refusal trap.** When RAG can't find enough context, it
+        > often responds with *"The context does not specify..."* — a technically truthful statement
+        > that earns **Faithfulness = 1.0** but **Relevancy ≈ 0**. Always read both scores together.
+        > The **Quality vs Cost** chart uses Faithfulness × Relevancy (not the average) so a hedged
+        > non-answer scores 0, not 0.5.
         """
     )
     c1, c2, c3, c4, c5, c6 = st.columns(6)
@@ -210,8 +216,8 @@ def _render_scatter(df: pd.DataFrame):
         """
         #### 📈 Quality vs Cost Trade-off
         Each dot is one pipeline's answer to one question. **Upper-left** = high quality, low cost
-        (the sweet spot). This chart makes it immediately clear whether the extra spend on the
-        agentic pipeline buys meaningfully better answers — or whether RAG is good enough.
+        (the sweet spot). Quality is **Faithfulness × Relevancy** — a product, not an average —
+        so a pipeline that refuses to answer (*faith=1, relev=0*) correctly scores **0**, not 0.5.
         Dot shape indicates question tier (🟢 simple / 🟡 multi-hop / 🔴 ambiguous).
         """
     )
@@ -219,8 +225,9 @@ def _render_scatter(df: pd.DataFrame):
         import altair as alt
         scatter_rows = []
         for _, row in df.iterrows():
-            rag_q   = (row.get("rag_faithfulness", 0)   + row.get("rag_answer_relevancy", 0))   / 2
-            agent_q = (row.get("agent_faithfulness", 0) + row.get("agent_answer_relevancy", 0)) / 2
+            # Use faithfulness × relevancy so a "faithful refusal" (faith=1, relev=0) scores 0
+            rag_q   = row.get("rag_faithfulness", 0)   * row.get("rag_answer_relevancy", 0)
+            agent_q = row.get("agent_faithfulness", 0) * row.get("agent_answer_relevancy", 0)
             q_short = row["question"][:55] + ("…" if len(row["question"]) > 55 else "")
             scatter_rows.append({"pipeline": "RAG",     "question": q_short, "tier": row.get("tier", ""), "quality_avg": round(rag_q,   3), "cost_usd": row.get("rag_cost_usd",   0), "latency_s": row.get("rag_latency_s",   0)})
             scatter_rows.append({"pipeline": "Agentic", "question": q_short, "tier": row.get("tier", ""), "quality_avg": round(agent_q, 3), "cost_usd": row.get("agent_cost_usd", 0), "latency_s": row.get("agent_latency_s", 0)})
@@ -229,7 +236,7 @@ def _render_scatter(df: pd.DataFrame):
             .mark_circle(size=130, opacity=0.85)
             .encode(
                 x=alt.X("cost_usd:Q", title="Cost per question (USD)", scale=alt.Scale(zero=True)),
-                y=alt.Y("quality_avg:Q", title="Avg Quality (Faithfulness + Relevancy) / 2", scale=alt.Scale(domain=[0, 1])),
+                y=alt.Y("quality_avg:Q", title="Quality (Faithfulness × Relevancy)", scale=alt.Scale(domain=[0, 1])),
                 color=alt.Color("pipeline:N", scale=alt.Scale(domain=["RAG", "Agentic"], range=["#4C78A8", "#F58518"])),
                 shape=alt.Shape("tier:N"),
                 tooltip=["pipeline", "tier", "question", "quality_avg", "cost_usd", "latency_s"],
