@@ -185,13 +185,12 @@ def build_graph_from_kb(log_fn=None) -> dict:
     for i, repo_name in enumerate(sorted(repo_names)):
         _log(f"  [{i+1}/{len(repo_names)}] Analyzing: {repo_name}")
 
-        # Pull the top chunks for this repo from ChromaDB
-        repo_results = collection.query(
-            query_texts=[f"technology stack framework language {repo_name}"],
-            n_results=5,
+        # Pull chunks for this repo from ChromaDB via .get() — avoids n_results > matches error
+        repo_docs_result = collection.get(
             where={"repo_name": repo_name},
+            include=["documents"],
         )
-        docs = repo_results.get("documents", [[]])[0]
+        docs = (repo_docs_result.get("documents") or [])[:5]
         readme_text = "\n\n".join(docs)[:3000]  # cap at 3K chars to keep cost low
 
         if not readme_text.strip():
