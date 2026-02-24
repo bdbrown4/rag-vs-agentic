@@ -1,3 +1,13 @@
+import warnings
+
+# Suppress LangChain's AIMessage.parsed serialization noise from Pydantic.
+warnings.filterwarnings(
+    "ignore",
+    message="Pydantic serializer warnings",
+    category=UserWarning,
+    module="pydantic",
+)
+
 """
 Agentic Retrieval using a custom LangGraph StateGraph.
 

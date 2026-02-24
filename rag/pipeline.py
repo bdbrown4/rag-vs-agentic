@@ -8,7 +8,18 @@ This is the "traditional" approach: one retrieval pass, one generation pass, no 
 """
 
 import time
+import warnings
 from dataclasses import dataclass, field
+
+# LangChain sets AIMessage.parsed = <PydanticModel> when using with_structured_output().
+# Pydantic's serializer warns because the field schema expects None.
+# This is a LangChain internal detail that doesn't affect correctness.
+warnings.filterwarnings(
+    "ignore",
+    message="Pydantic serializer warnings",
+    category=UserWarning,
+    module="pydantic",
+)
 
 from langchain_openai import ChatOpenAI
 from langchain_community.callbacks import get_openai_callback
