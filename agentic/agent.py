@@ -263,3 +263,128 @@ def run_agentic_pipeline(
         steps=steps,
         guardrails=guardrails,
     )
+
+
+def stream_agentic_pipeline(
+    question: str,
+    model: str = "gpt-4o",
+    max_iterations: int = 8,
+):
+    """
+    Streaming version of the LangGraph agentic pipeline.
+
+    Yields one event dict per graph node transition, so the Streamlit UI can
+    show live progress without waiting for the full pipeline to finish:
+
+      {"type": "status",      "text": "..."}          — human-readable progress label
+      {"type": "plan",        "content": "..."}        — the planner's numbered retrieval plan
+      {"type": "tool_call",   "tool": "...", "args": {...}} — about to call a tool
+      {"type": "observation", "tool": "...", "content": "..."}  — tool result
+      {"type": "answer",      "content": "..."}        — final answer text
+      {"type": "result",      "result": AgenticResult} — complete result with all metrics
+
+    Pattern: collect plan/tool_call/observation events for the trace display.
+    The "result" event is always last.
+    """
+    start = time.time()
+
+    llm_executor    = ChatOpenAI(model=model, temperature=0)
+    llm_synthesizer = ChatOpenAI(model=model, temperature=0)
+    graph = _build_graph(llm_executor, llm_synthesizer)
+
+    yield {"type": "status", "text": "🧠 Planner is generating a retrieval strategy…"}
+
+    steps: list[str] = []
+    tool_calls: list[dict] = []
+    llm_calls = 0
+    plan = ""
+    answer = "No answer produced."
+    guardrails_obj: AgenticAnswer | None = None
+
+    with get_openai_callback() as cb:
+        for event in graph.stream(
+            {"messages": [HumanMessage(content=question)], "plan": "", "iteration": 0},
+            config={"recursion_limit": max_iterations * 2 + 6},
+            stream_mode="updates",
+        ):
+            for node_name, node_output in event.items():
+                if node_name == "planner":
+                    plan = node_output.get("plan", "")
+                    if plan:
+                        steps.append(f"📋 PLAN:\n{plan}")
+                        yield {"type": "plan", "content": plan}
+                        yield {"type": "status", "text": "⚡ Executor is selecting tools and retrieving information…"}
+
+                elif node_name == "executor":
+                    llm_calls += 1
+                    msgs = node_output.get("messages", [])
+                    for msg in msgs:
+                        if isinstance(msg, AIMessage) and msg.tool_calls:
+                            for tc in msg.tool_calls:
+                                steps.append(f"THOUGHT: Decided to use '{tc['name']}'")
+                                steps.append(f"ACTION: {tc['name']}({tc['args']})")
+                                yield {
+                                    "type": "tool_call",
+                                    "tool": tc["name"],
+                                    "args": tc["args"],
+                                }
+                                yield {"type": "status", "text": f"🔧 Calling tool: **{tc['name']}**…"}
+
+                elif node_name == "tools":
+                    msgs = node_output.get("messages", [])
+                    for msg in msgs:
+                        if isinstance(msg, ToolMessage):
+                            full_output = str(msg.content)
+                            steps.append(f"OBSERVATION: {full_output[:200]}…")
+                            tool_calls.append({
+                                "tool":           msg.name,
+                                "input":          "",
+                                "output_preview": full_output[:200],
+                                "output_full":    full_output,
+                            })
+                            yield {
+                                "type":    "observation",
+                                "tool":    msg.name,
+                                "content": full_output,
+                            }
+                            yield {"type": "status", "text": f"📊 Got result from **{msg.name}** — reasoning about next step…"}
+
+                elif node_name == "synthesizer":
+                    llm_calls += 1
+                    msgs = node_output.get("messages", [])
+                    for msg in msgs:
+                        if isinstance(msg, AIMessage):
+                            answer = msg.content if isinstance(msg.content, str) else str(msg.content)
+                            steps.append(f"FINAL ANSWER: Generated after {len(tool_calls)} tool calls")
+                            gdata = (msg.additional_kwargs or {}).get("guardrails")
+                            if gdata:
+                                try:
+                                    guardrails_obj = AgenticAnswer(**gdata)
+                                except Exception:
+                                    pass
+                    yield {"type": "answer", "content": answer}
+                    yield {"type": "status", "text": "✅ Answer ready"}
+
+    prompt_tokens     = cb.prompt_tokens
+    completion_tokens = cb.completion_tokens
+    total_tokens      = cb.total_tokens
+    cost_usd          = estimate_cost(model, prompt_tokens, completion_tokens)
+    elapsed           = time.time() - start
+
+    yield {
+        "type": "result",
+        "result": AgenticResult(
+            question=question,
+            answer=answer,
+            plan=plan,
+            llm_calls=llm_calls,
+            tool_calls=tool_calls,
+            total_tokens=total_tokens,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            cost_usd=cost_usd,
+            latency_seconds=round(elapsed, 2),
+            steps=steps,
+            guardrails=guardrails_obj,
+        ),
+    }

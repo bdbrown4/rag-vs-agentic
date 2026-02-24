@@ -57,6 +57,122 @@ Answer the question based ONLY on the provided context. If the context doesn't c
 Be specific and cite which repository/project your answer comes from when possible."""
 
 
+def stream_rag_pipeline(
+    question: str,
+    n_results: int = 5,
+    model: str = "gpt-4o",
+):
+    """
+    Streaming version of the RAG pipeline.
+
+    Yields events as a dict so the caller (Streamlit) can update the UI live:
+      {"type": "status",  "text": "..."}          — progress messages
+      {"type": "chunks",  "chunks": [...]}         — retrieved chunks metadata
+      {"type": "token",   "text": "..."}           — individual answer tokens (streamed from LLM)
+      {"type": "result",  "result": RAGResult}     — final complete result (last event)
+
+    The caller should collect all "token" events to build the displayed answer,
+    then use the "result" event for metrics (tokens, cost, confidence, latency).
+    """
+    import time as _time
+    start = _time.time()
+    steps = []
+
+    # Step 1: Retrieve
+    yield {"type": "status", "text": f"🔍 Searching knowledge base for top {n_results} relevant chunks…"}
+    chunks = query_similar(question, n_results=n_results)
+    repo_names = [c["metadata"].get("repo_name", "?") for c in chunks]
+    steps.append(f"RETRIEVE: Searching for top {n_results} chunks matching: '{question}'")
+    steps.append(f"RETRIEVED: Got {len(chunks)} chunks from repos: {repo_names}")
+    yield {"type": "chunks", "chunks": chunks}
+    yield {"type": "status", "text": f"📄 Retrieved {len(chunks)} chunks from: {', '.join(repo_names)}. Building context…"}
+
+    # Step 2: Build context
+    context = build_context(chunks)
+    steps.append(f"CONTEXT: Built context from {len(chunks)} chunks ({len(context)} chars)")
+
+    # Step 3: Confidence gate
+    confidence = compute_confidence([c["distance"] for c in chunks])
+    if should_gate(confidence):
+        steps.append("GATED: Retrieval confidence too low — skipping generation")
+        elapsed = _time.time() - start
+        result = RAGResult(
+            question=question, answer=GATED_ANSWER, retrieved_chunks=chunks,
+            llm_calls=0, confidence=confidence, latency_seconds=round(elapsed, 2),
+            steps=steps, uncertainty_note="Retrieval confidence below threshold — answer suppressed.",
+        )
+        yield {"type": "result", "result": result}
+        return
+
+    # Step 4: Stream generation
+    yield {"type": "status", "text": "✍️ Generating answer — streaming tokens as they arrive…"}
+    llm_stream = ChatOpenAI(model=model, temperature=0, streaming=True)
+
+    structured_prompt = (
+        RAG_SYSTEM_PROMPT
+        + "\n\nYou MUST return a structured response with: answer, sources list, "
+        + "confidence label (high/medium/low/insufficient-context), and optional uncertainty_note."
+    )
+
+    full_answer = ""
+    uncertainty_note: str | None = None
+    prompt_tokens = 0
+    completion_tokens = 0
+
+    with get_openai_callback() as cb:
+        try:
+            # Use plain streaming for token-by-token display
+            for chunk in llm_stream.stream([
+                {"role": "system", "content": RAG_SYSTEM_PROMPT},
+                {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}"},
+            ]):
+                token = chunk.content
+                if token:
+                    full_answer += token
+                    yield {"type": "token", "text": token}
+        except Exception as exc:
+            full_answer = f"Generation error: {exc}"
+            yield {"type": "token", "text": full_answer}
+
+        # Try structured scoring pass to get confidence label & uncertainty note
+        try:
+            structured_llm = ChatOpenAI(model=model, temperature=0).with_structured_output(RAGAnswer)
+            schema_resp: RAGAnswer = structured_llm.invoke([
+                {"role": "system", "content": structured_prompt},
+                {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}"},
+            ])
+            schema_conf = confidence_from_schema(schema_resp.confidence)
+            if schema_conf > 0.1:
+                confidence = max(confidence, schema_conf)
+            uncertainty_note = schema_resp.uncertainty_note
+        except Exception:
+            pass
+
+        prompt_tokens = cb.prompt_tokens
+        completion_tokens = cb.completion_tokens
+
+    total_tokens = prompt_tokens + completion_tokens
+    cost_usd = estimate_cost(model, prompt_tokens, completion_tokens)
+    steps.append(f"ANSWER: Streamed response ({total_tokens} tokens, ${cost_usd:.4f})")
+    elapsed = _time.time() - start
+
+    result = RAGResult(
+        question=question,
+        answer=full_answer,
+        retrieved_chunks=chunks,
+        llm_calls=1,
+        total_tokens=total_tokens,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        cost_usd=cost_usd,
+        confidence=confidence,
+        latency_seconds=round(elapsed, 2),
+        steps=steps,
+        uncertainty_note=uncertainty_note,
+    )
+    yield {"type": "result", "result": result}
+
+
 def run_rag_pipeline(
     question: str,
     n_results: int = 5,
