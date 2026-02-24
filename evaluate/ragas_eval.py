@@ -224,7 +224,10 @@ def run_ragas_eval_streaming(
             "question_id": q["id"],
             "tier":        q["tier"],
             "question":    q["question"],
-            # RAG
+            # Full answers for display
+            "rag_answer":   rag_rec["answer"],
+            "agent_answer": agent_rec["answer"],
+            # RAG scores + perf
             "rag_faithfulness":      round(_get(rag_scores,   "faithfulness"), 3),
             "rag_answer_relevancy":  round(_get(rag_scores,   "answer_relevancy", "response_relevancy"), 3),
             "rag_context_precision": round(_get(rag_scores,   "llm_context_precision_without_reference", "context_precision"), 3),
@@ -232,7 +235,7 @@ def run_ragas_eval_streaming(
             "rag_cost_usd":          round(rag_rec["cost_usd"], 6),
             "rag_confidence":        round(rag_rec.get("confidence", 0.0), 3),
             "rag_latency_s":         rag_rec["latency_seconds"],
-            # Agentic
+            # Agentic scores + perf
             "agent_faithfulness":      round(_get(agent_scores, "faithfulness"), 3),
             "agent_answer_relevancy":  round(_get(agent_scores, "answer_relevancy", "response_relevancy"), 3),
             "agent_context_precision": round(_get(agent_scores, "llm_context_precision_without_reference", "context_precision"), 3),
