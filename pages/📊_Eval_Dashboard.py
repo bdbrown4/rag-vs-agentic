@@ -1,5 +1,5 @@
-﻿"""
-ðŸ“Š Eval Dashboard â€” RAGAS-scored comparison of RAG vs Agentic pipelines.
+"""
+📊 Eval Dashboard — RAGAS-scored comparison of RAG vs Agentic pipelines.
 
 Streamlit multi-page app: accessible from the sidebar navigation when
 running `streamlit run app.py`.
@@ -13,7 +13,7 @@ from pathlib import Path
 import streamlit as st
 
 # Make project root importable when running as a page.
-# Idempotent â€” avoids corrupting sys.modules in Streamlit's shared MPA process.
+# Idempotent — avoids corrupting sys.modules in Streamlit's shared MPA process.
 _project_root = str(Path(__file__).parent.parent)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
@@ -24,30 +24,30 @@ load_dotenv()
 import pandas as pd
 
 st.set_page_config(page_title="Eval Dashboard", layout="wide")
-st.title("ðŸ“Š RAGAS Evaluation Dashboard")
+st.title("📊 RAGAS Evaluation Dashboard")
 st.markdown(
     """
     This dashboard runs a structured evaluation of the **Classic RAG** and **Agentic** pipelines
-    side-by-side using the [RAGAS](https://docs.ragas.io) framework â€” an LLM-assisted evaluation
+    side-by-side using the [RAGAS](https://docs.ragas.io) framework — an LLM-assisted evaluation
     suite used in production AI systems. Each question is scored on three dimensions that together
     tell you whether a pipeline is trustworthy, useful, and efficient.
 
-    > **How to use:** Select a question tier and how many questions to run, then click **â–¶ Run Evaluation**.
+    > **How to use:** Select a question tier and how many questions to run, then click **▶ Run Evaluation**.
     > Results appear question-by-question as they complete.
     """
 )
 
-# â”€â”€ Sidebar controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Sidebar controls ──────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Eval Settings")
     tier = st.selectbox(
         "Question tier",
         ["all", "simple", "multi-hop", "ambiguous"],
         help=(
-            "**simple** â€” single-fact lookups\n\n"
-            "**multi-hop** â€” require combining facts across multiple docs\n\n"
-            "**ambiguous** â€” open-ended synthesis questions\n\n"
-            "**all** â€” run every tier"
+            "**simple** — single-fact lookups\n\n"
+            "**multi-hop** — require combining facts across multiple docs\n\n"
+            "**ambiguous** — open-ended synthesis questions\n\n"
+            "**all** — run every tier"
         ),
     )
     limit = st.slider(
@@ -57,16 +57,16 @@ with st.sidebar:
     )
     st.caption(
         f"Running **{limit}** question(s) from tier **'{tier}'**. "
-        "Each question costs roughly $0.01â€“0.05 in OpenAI tokens."
+        "Each question costs roughly $0.01–0.05 in OpenAI tokens."
     )
     st.divider()
-    run_eval = st.button("â–¶ Run Evaluation", type="primary", use_container_width=True)
+    run_eval = st.button("▶ Run Evaluation", type="primary", use_container_width=True)
 
-# â”€â”€ Session state init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Session state init ────────────────────────────────────────────────────────
 if "eval_df" not in st.session_state:
     st.session_state["eval_df"] = None
 
-# â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Helpers ───────────────────────────────────────────────────────────────────
 _SCORE_COLS = [
     "rag_faithfulness", "rag_answer_relevancy", "rag_context_precision",
     "agent_faithfulness", "agent_answer_relevancy", "agent_context_precision",
@@ -107,7 +107,7 @@ def _render_summary_metrics(df: pd.DataFrame):
     st.markdown(
         """
         #### ðŸ“ RAGAS Score Averages
-        These three metrics are scored by an LLM judge â€” the industry-standard way to evaluate
+        These three metrics are scored by an LLM judge — the industry-standard way to evaluate
         retrieval systems without hand-labeled ground truth:
 
         | Metric | What it measures |
@@ -116,14 +116,14 @@ def _render_summary_metrics(df: pd.DataFrame):
         | **Answer Relevancy** | How directly does the answer address the question? High = focused, on-topic. |
         | **Context Precision** | How much of the retrieved context was actually useful? High = efficient retrieval. |
 
-        Scores are 0â€“1. A well-performing pipeline should score **> 0.7** across all three.
-        The delta on agent metrics shows Agent minus RAG â€” positive means the agent did better.
+        Scores are 0–1. A well-performing pipeline should score **> 0.7** across all three.
+        The delta on agent metrics shows Agent minus RAG — positive means the agent did better.
         """
     )
     c1, c2, c3, c4, c5, c6 = st.columns(6)
-    c1.metric("RAG Faithfulness",    _avg(df, "rag_faithfulness"),        help="0â€“1: factual consistency with retrieved context")
-    c2.metric("RAG Relevancy",       _avg(df, "rag_answer_relevancy"),    help="0â€“1: how on-topic the answer is")
-    c3.metric("RAG Ctx Precision",   _avg(df, "rag_context_precision"),   help="0â€“1: signal-to-noise in retrieved chunks")
+    c1.metric("RAG Faithfulness",    _avg(df, "rag_faithfulness"),        help="0–1: factual consistency with retrieved context")
+    c2.metric("RAG Relevancy",       _avg(df, "rag_answer_relevancy"),    help="0–1: how on-topic the answer is")
+    c3.metric("RAG Ctx Precision",   _avg(df, "rag_context_precision"),   help="0–1: signal-to-noise in retrieved chunks")
     c4.metric("Agent Faithfulness",  _avg(df, "agent_faithfulness"),      delta=_delta(df, "rag_faithfulness",      "agent_faithfulness"))
     c5.metric("Agent Relevancy",     _avg(df, "agent_answer_relevancy"),  delta=_delta(df, "rag_answer_relevancy",  "agent_answer_relevancy"))
     c6.metric("Agent Ctx Precision", _avg(df, "agent_context_precision"), delta=_delta(df, "rag_context_precision", "agent_context_precision"))
@@ -131,9 +131,9 @@ def _render_summary_metrics(df: pd.DataFrame):
     st.divider()
     st.markdown(
         """
-        #### ðŸ’° Cost Summary
+        #### 💰 Cost Summary
         Every comparison call costs real tokens. The agentic pipeline typically costs more because
-        it makes multiple LLM calls per question â€” one per reasoning step. This section lets you
+        it makes multiple LLM calls per question — one per reasoning step. This section lets you
         weigh quality gains against the extra spend.
         """
     )
@@ -148,8 +148,8 @@ def _render_summary_metrics(df: pd.DataFrame):
 def _render_scores_table(df: pd.DataFrame):
     st.markdown(
         """
-        #### ðŸ“‹ Per-Question Scores
-        Each row is one question. Compare RAG and Agentic side-by-side â€” latency and cost columns
+        #### 📋 Per-Question Scores
+        Each row is one question. Compare RAG and Agentic side-by-side — latency and cost columns
         reveal the efficiency trade-off behind each score. Expand **Question Details** below to read
         the actual answers that produced these numbers.
         """
@@ -165,42 +165,42 @@ def _render_scores_table(df: pd.DataFrame):
 def _render_question_details(df: pd.DataFrame):
     st.markdown(
         """
-        #### ðŸ’¬ Question Details
+        #### 💬 Question Details
         Scores only make sense in context of the actual answers. Expand any question to read what
-        each pipeline said â€” and judge for yourself whether the RAGAS scores match your intuition.
+        each pipeline said — and judge for yourself whether the RAGAS scores match your intuition.
         """
     )
-    tier_icon = {"simple": "ðŸŸ¢", "multi-hop": "ðŸŸ¡", "ambiguous": "ðŸ”´"}
+    tier_icon = {"simple": "🟢", "multi-hop": "🟡", "ambiguous": "🔴"}
     for _, row in df.iterrows():
-        icon  = tier_icon.get(row.get("tier", ""), "âšª")
-        label = f"{icon} Q{row['question_id']} [{row.get('tier','?')}] â€” {row['question'][:80]}{'â€¦' if len(row['question']) > 80 else ''}"
+        icon  = tier_icon.get(row.get("tier", ""), "⚪")
+        label = f"{icon} Q{row['question_id']} [{row.get('tier','?')}] — {row['question'][:80]}{'…' if len(row['question']) > 80 else ''}"
         with st.expander(label):
             st.markdown(f"**Question:** {row['question']}")
             st.divider()
             col_rag, col_agent = st.columns(2)
 
             with col_rag:
-                st.markdown("##### ðŸ—‚ï¸ Classic RAG")
+                st.markdown("##### 🗂️ Classic RAG")
                 st.markdown(row.get("rag_answer", "_No answer recorded_"))
                 st.caption(
-                    f"Faithfulness **{row.get('rag_faithfulness', 0):.3f}** Â· "
-                    f"Relevancy **{row.get('rag_answer_relevancy', 0):.3f}** Â· "
+                    f"Faithfulness **{row.get('rag_faithfulness', 0):.3f}** · "
+                    f"Relevancy **{row.get('rag_answer_relevancy', 0):.3f}** · "
                     f"Ctx Precision **{row.get('rag_context_precision', 0):.3f}**  \n"
-                    f"Tokens: {row.get('rag_tokens', 'â€”')} Â· "
-                    f"Cost: ${row.get('rag_cost_usd', 0):.5f} Â· "
-                    f"Latency: {row.get('rag_latency_s', 0):.2f}s Â· "
+                    f"Tokens: {row.get('rag_tokens', '—')} · "
+                    f"Cost: ${row.get('rag_cost_usd', 0):.5f} · "
+                    f"Latency: {row.get('rag_latency_s', 0):.2f}s · "
                     f"Confidence: {row.get('rag_confidence', 0):.2f}"
                 )
 
             with col_agent:
-                st.markdown("##### ðŸ¤– Agentic")
+                st.markdown("##### 🤖 Agentic")
                 st.markdown(row.get("agent_answer", "_No answer recorded_"))
                 st.caption(
-                    f"Faithfulness **{row.get('agent_faithfulness', 0):.3f}** Â· "
-                    f"Relevancy **{row.get('agent_answer_relevancy', 0):.3f}** Â· "
+                    f"Faithfulness **{row.get('agent_faithfulness', 0):.3f}** · "
+                    f"Relevancy **{row.get('agent_answer_relevancy', 0):.3f}** · "
                     f"Ctx Precision **{row.get('agent_context_precision', 0):.3f}**  \n"
-                    f"Tokens: {row.get('agent_tokens', 'â€”')} Â· "
-                    f"Cost: ${row.get('agent_cost_usd', 0):.5f} Â· "
+                    f"Tokens: {row.get('agent_tokens', '—')} · "
+                    f"Cost: ${row.get('agent_cost_usd', 0):.5f} · "
                     f"Latency: {row.get('agent_latency_s', 0):.2f}s"
                 )
 
@@ -208,11 +208,11 @@ def _render_question_details(df: pd.DataFrame):
 def _render_scatter(df: pd.DataFrame):
     st.markdown(
         """
-        #### ðŸ“ˆ Quality vs Cost Trade-off
+        #### 📈 Quality vs Cost Trade-off
         Each dot is one pipeline's answer to one question. **Upper-left** = high quality, low cost
         (the sweet spot). This chart makes it immediately clear whether the extra spend on the
-        agentic pipeline buys meaningfully better answers â€” or whether RAG is good enough.
-        Dot shape indicates question tier (ðŸŸ¢ simple / ðŸŸ¡ multi-hop / ðŸ”´ ambiguous).
+        agentic pipeline buys meaningfully better answers — or whether RAG is good enough.
+        Dot shape indicates question tier (🟢 simple / 🟡 multi-hop / 🔴 ambiguous).
         """
     )
     try:
@@ -221,7 +221,7 @@ def _render_scatter(df: pd.DataFrame):
         for _, row in df.iterrows():
             rag_q   = (row.get("rag_faithfulness", 0)   + row.get("rag_answer_relevancy", 0))   / 2
             agent_q = (row.get("agent_faithfulness", 0) + row.get("agent_answer_relevancy", 0)) / 2
-            q_short = row["question"][:55] + ("â€¦" if len(row["question"]) > 55 else "")
+            q_short = row["question"][:55] + ("…" if len(row["question"]) > 55 else "")
             scatter_rows.append({"pipeline": "RAG",     "question": q_short, "tier": row.get("tier", ""), "quality_avg": round(rag_q,   3), "cost_usd": row.get("rag_cost_usd",   0), "latency_s": row.get("rag_latency_s",   0)})
             scatter_rows.append({"pipeline": "Agentic", "question": q_short, "tier": row.get("tier", ""), "quality_avg": round(agent_q, 3), "cost_usd": row.get("agent_cost_usd", 0), "latency_s": row.get("agent_latency_s", 0)})
         chart = (
@@ -245,9 +245,9 @@ def _render_scatter(df: pd.DataFrame):
 def _render_tier_breakdown(df: pd.DataFrame):
     st.markdown(
         """
-        #### ðŸ·ï¸ Scores by Question Tier
+        #### ðŸ·️ Scores by Question Tier
         Not all questions are equally hard. **Simple** questions should be easy for both pipelines.
-        **Multi-hop** questions require combining facts across documents â€” this is where the agentic
+        **Multi-hop** questions require combining facts across documents — this is where the agentic
         pipeline's iterative search typically pays off. **Ambiguous** questions require synthesis;
         expect lower scores since RAGAS has less grounding to judge against.
 
@@ -275,14 +275,14 @@ def _render_full_results(df: pd.DataFrame):
     st.divider()
     csv = df.to_csv(index=False).encode("utf-8")
     st.download_button(
-        label="â¬‡ Download full results as CSV",
+        label="⬇ Download full results as CSV",
         data=csv,
         file_name="ragas_eval_results.csv",
         mime="text/csv",
     )
 
 
-# â”€â”€ Run evaluation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Run evaluation ────────────────────────────────────────────────────────────
 if run_eval:
     try:
         from evaluate.ragas_eval import run_ragas_eval_streaming
@@ -295,7 +295,7 @@ if run_eval:
 
     questions_path = Path(__file__).parent.parent / "evaluate" / "questions.json"
 
-    progress_bar = st.progress(0, text="Initializingâ€¦")
+    progress_bar = st.progress(0, text="Initializing…")
     status_text  = st.empty()
     live_slot    = st.empty()   # grows with live results
 
@@ -320,23 +320,23 @@ if run_eval:
             tier_label = f"tier: {tier}" if tier != "all" else "all tiers"
             progress_bar.progress(
                 (idx + 1) / total,
-                text=f"âœ… Q{row['question_id']} [{row['tier']}] â€” {idx+1}/{total} ({tier_label})",
+                text=f"✅ Q{row['question_id']} [{row['tier']}] — {idx+1}/{total} ({tier_label})",
             )
             status_text.markdown(
                 f"**Last scored:** *{row['question'][:90]}*  \n"
-                f"RAG faithfulness **{row['rag_faithfulness']:.2f}** Â· "
+                f"RAG faithfulness **{row['rag_faithfulness']:.2f}** · "
                 f"Agent faithfulness **{row['agent_faithfulness']:.2f}**"
             )
 
             with live_slot.container():
                 partial_df = pd.DataFrame(rows)
-                st.caption(f"Live results â€” {len(rows)} of {total} questions scored so far")
+                st.caption(f"Live results — {len(rows)} of {total} questions scored so far")
                 _render_scores_table(partial_df)
                 st.divider()
                 _render_question_details(partial_df)
 
-        # Completed â€” clean up live widgets and do a full re-render
-        progress_bar.progress(1.0, text=f"âœ… Complete â€” {len(rows)} questions scored")
+        # Completed — clean up live widgets and do a full re-render
+        progress_bar.progress(1.0, text=f"✅ Complete — {len(rows)} questions scored")
         status_text.empty()
         live_slot.empty()
         st.session_state["eval_df"] = pd.DataFrame(rows)
@@ -349,16 +349,16 @@ if run_eval:
         if rows:
             st.session_state["eval_df"] = pd.DataFrame(rows)
             live_slot.empty()
-            st.warning(f"Showing partial results â€” {len(rows)} questions completed before the error.")
+            st.warning(f"Showing partial results — {len(rows)} questions completed before the error.")
             _render_full_results(st.session_state["eval_df"])
         st.stop()
 
-# â”€â”€ Static display (from session_state â€” survives reruns) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Static display (from session_state — survives reruns) ────────────────────
 df = st.session_state.get("eval_df")
 
 if df is None or len(df) == 0:
     st.info(
-        "ðŸ‘ˆ Configure settings in the sidebar and click **â–¶ Run Evaluation** to start.\n\n"
+        "👈 Configure settings in the sidebar and click **▶ Run Evaluation** to start.\n\n"
         "Results will appear question-by-question as they complete."
     )
     st.stop()
