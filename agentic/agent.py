@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import warnings
 
 # Suppress LangChain's AIMessage.parsed serialization noise from Pydantic.
@@ -29,8 +31,6 @@ Why this matters over create_react_agent:
   - Graph structure allows conditional routing and easy extension (e.g. reflection nodes).
   - Plan is surfaced to the user so they can see the agent's strategy.
 """
-
-from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
