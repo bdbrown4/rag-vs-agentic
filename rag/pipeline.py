@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from langchain_openai import ChatOpenAI
 
 from shared.vector_store import query_similar
+from shared.metrics import estimate_cost, compute_confidence
 
 
 @dataclass
@@ -23,6 +24,10 @@ class RAGResult:
     retrieved_chunks: list[dict]
     llm_calls: int = 1
     total_tokens: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    cost_usd: float = 0.0
+    confidence: float = 0.0   # retrieval confidence: avg cosine similarity of top chunks
     latency_seconds: float = 0.0
     steps: list[str] = field(default_factory=list)
 
@@ -81,8 +86,13 @@ def run_rag_pipeline(
     ])
 
     answer = response.content
-    total_tokens = response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
-    steps.append(f"ANSWER: Generated response ({total_tokens} tokens)")
+    usage = response.response_metadata.get("token_usage", {})
+    prompt_tokens = usage.get("prompt_tokens", 0)
+    completion_tokens = usage.get("completion_tokens", 0)
+    total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
+    cost_usd = estimate_cost(model, prompt_tokens, completion_tokens)
+    confidence = compute_confidence([c["distance"] for c in chunks])
+    steps.append(f"ANSWER: Generated response ({total_tokens} tokens, ${cost_usd:.4f})")
 
     elapsed = time.time() - start
 
@@ -92,6 +102,10 @@ def run_rag_pipeline(
         retrieved_chunks=chunks,
         llm_calls=1,
         total_tokens=total_tokens,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        cost_usd=cost_usd,
+        confidence=confidence,
         latency_seconds=round(elapsed, 2),
         steps=steps,
     )

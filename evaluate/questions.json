@@ -26,51 +26,159 @@
     },
     {
       "id": 5,
+      "tier": "simple",
+      "question": "What is the github-portfolio-mcp-server project?",
+      "notes": "Direct README lookup for a specific project"
+    },
+    {
+      "id": 6,
+      "tier": "simple",
+      "question": "What programming language is the koolo project written in?",
+      "notes": "Single fact — Go project"
+    },
+    {
+      "id": 7,
+      "tier": "simple",
+      "question": "What is the FHIRServerAPI project about?",
+      "notes": "Direct lookup — healthcare/FHIR server"
+    },
+    {
+      "id": 8,
+      "tier": "simple",
+      "question": "What deployment platform does the github-portfolio-mcp-server use?",
+      "notes": "Single fact retrieval — Railway"
+    },
+    {
+      "id": 9,
+      "tier": "simple",
+      "question": "What does the duckracenamegenerator project do?",
+      "notes": "Direct README lookup"
+    },
+    {
+      "id": 10,
+      "tier": "simple",
+      "question": "What does the rag-vs-agentic project demonstrate?",
+      "notes": "Direct README lookup for this very project"
+    },
+    {
+      "id": 11,
       "tier": "multi-hop",
       "question": "Which projects use Angular, and how do they differ in purpose?",
       "notes": "Requires finding multiple repos, comparing them"
     },
     {
-      "id": 6,
+      "id": 12,
       "tier": "multi-hop",
       "question": "How does the developer's experience with Kotlin differ between the NasaPictureOfTheDay and TodoApp projects?",
       "notes": "Cross-document comparison requiring both READMEs"
     },
     {
-      "id": 7,
+      "id": 13,
       "tier": "multi-hop",
       "question": "What backend technologies has the developer used across all projects?",
       "notes": "Requires aggregating info from multiple repos"
     },
     {
-      "id": 8,
+      "id": 14,
       "tier": "multi-hop",
       "question": "Compare the authentication approaches used in MEANAuthApp vs MEANAuthAppAngular.",
       "notes": "Must retrieve and compare two specific repos"
     },
     {
-      "id": 9,
+      "id": 15,
+      "tier": "multi-hop",
+      "question": "Which project has the most stars, and what is it about?",
+      "notes": "Agent can use live GitHub API; RAG only sees static READMEs"
+    },
+    {
+      "id": 16,
+      "tier": "multi-hop",
+      "question": "How do the NasaPictureOfTheDay Android and Kotlin projects compare in their tech stacks?",
+      "notes": "Two READMEs needed; agent can fetch both directly"
+    },
+    {
+      "id": 17,
+      "tier": "multi-hop",
+      "question": "Which projects use TypeScript, and what are they used for?",
+      "notes": "Must scan multiple repos for TypeScript usage"
+    },
+    {
+      "id": 18,
+      "tier": "multi-hop",
+      "question": "What cloud hosting or deployment platforms has the developer used across their projects?",
+      "notes": "Aggregation across multiple repos — Vercel, Railway, Firebase, etc."
+    },
+    {
+      "id": 19,
+      "tier": "multi-hop",
+      "question": "Does the developer have any AI, LLM, or machine learning projects? What are they?",
+      "notes": "Requires broad portfolio scan; agent can search semantically"
+    },
+    {
+      "id": 20,
+      "tier": "multi-hop",
+      "question": "What web component projects has the developer built, and what technologies do they use?",
+      "notes": "Must identify web-component repos and compare them"
+    },
+    {
+      "id": 21,
+      "tier": "multi-hop",
+      "question": "Which projects use a database, and what kind of database does each use?",
+      "notes": "Cross-repo aggregation — SQL, NoSQL, vector DB, etc."
+    },
+    {
+      "id": 22,
       "tier": "ambiguous",
       "question": "What should I look at if I want to see this developer's best work?",
       "notes": "Subjective — agent can check stars, recency, descriptions"
     },
     {
-      "id": 10,
+      "id": 23,
       "tier": "ambiguous",
       "question": "Is this developer experienced enough for a full-stack role?",
       "notes": "Requires synthesizing across many repos and technologies"
     },
     {
-      "id": 11,
+      "id": 24,
       "tier": "ambiguous",
       "question": "What areas could this developer improve in based on their portfolio?",
       "notes": "Requires broad analysis — agent can explore, RAG gets noisy"
     },
     {
-      "id": 12,
-      "tier": "multi-hop",
-      "question": "Which project has the most stars, and what is it about?",
-      "notes": "Agent can use live GitHub API; RAG only sees static READMEs"
+      "id": 25,
+      "tier": "ambiguous",
+      "question": "Is this developer more of a frontend or backend engineer?",
+      "notes": "Judgment call needing breadth of project analysis"
+    },
+    {
+      "id": 26,
+      "tier": "ambiguous",
+      "question": "What unique strengths does this developer bring to a software team?",
+      "notes": "Open-ended synthesis requiring portfolio-wide view"
+    },
+    {
+      "id": 27,
+      "tier": "ambiguous",
+      "question": "Would this developer be a good fit for a Python-heavy backend role?",
+      "notes": "Requires inferring skill depth from project evidence"
+    },
+    {
+      "id": 28,
+      "tier": "ambiguous",
+      "question": "Which project in this portfolio demonstrates the most architectural sophistication?",
+      "notes": "Subjective ranking — agent can reason across multiple; RAG may pick one"
+    },
+    {
+      "id": 29,
+      "tier": "ambiguous",
+      "question": "How would you describe this developer's approach to mobile development?",
+      "notes": "Inference from Android/Kotlin/Compose projects"
+    },
+    {
+      "id": 30,
+      "tier": "ambiguous",
+      "question": "Based on this portfolio, what kind of engineering problems does this developer enjoy solving?",
+      "notes": "High inference — tests ability to synthesize personality from work"
     }
   ]
 }

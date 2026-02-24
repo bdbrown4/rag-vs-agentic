@@ -120,6 +120,7 @@ chunk_count: int = st.session_state.kb_chunk_count
 # ── Deferred imports (after env loaded) ──────────────────────────────────────
 from rag.pipeline import run_rag_pipeline
 from agentic.agent import run_agentic_pipeline
+from shared.metrics import confidence_label, log_query, load_query_log, clear_query_log
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 st.title("RAG vs Agentic Retrieval")
@@ -176,6 +177,17 @@ with st.sidebar:
                         del st.session_state["kb_chunk_count"]
                         st.rerun()
 
+                    st.divider()
+                    st.markdown("**📋 Query Log**")
+                    _qlog = load_query_log(20)
+                    st.caption(f"{len(_qlog)} recent queries logged")
+                    if st.button("🗑️ Clear Log", use_container_width=True, key="clear_qlog"):
+                        clear_query_log()
+                        st.success("Log cleared")
+                        st.rerun()
+                    for _entry in _qlog[:5]:
+                        st.json(_entry, expanded=False)
+
                 st.divider()
 
     st.caption(f"Knowledge base: **{chunk_count:,} chunks**")
@@ -215,6 +227,8 @@ question = st.text_input(
 )
 
 if st.button("Compare", type="primary", use_container_width=True) and question:
+    _rag_result = None
+    _agent_result = None
     col_rag, col_agent = st.columns(2)
 
     # --- RAG Column ---
@@ -223,14 +237,18 @@ if st.button("Compare", type="primary", use_container_width=True) and question:
         with st.spinner("Retrieving & generating..."):
             try:
                 rag_result = run_rag_pipeline(question, n_results=n_results)
+                _rag_result = rag_result
 
                 st.success(f"Done in {rag_result.latency_seconds}s")
 
                 # Metrics
-                m1, m2, m3 = st.columns(3)
+                m1, m2, m3, m4 = st.columns(4)
                 m1.metric("LLM Calls", rag_result.llm_calls)
                 m2.metric("Tokens", rag_result.total_tokens)
                 m3.metric("Chunks", len(rag_result.retrieved_chunks))
+                m4.metric("Cost", f"${rag_result.cost_usd:.4f}")
+                _emoji, _label = confidence_label(rag_result.confidence)
+                st.caption(f"Confidence: {_emoji} {_label} ({rag_result.confidence:.2f})")
 
                 # Answer
                 st.markdown("**Answer:**")
@@ -265,14 +283,16 @@ if st.button("Compare", type="primary", use_container_width=True) and question:
                     max_iterations=max_iterations,
                     verbose=False,
                 )
+                _agent_result = agent_result
 
                 st.success(f"Done in {agent_result.latency_seconds}s")
 
                 # Metrics
-                m1, m2, m3 = st.columns(3)
+                m1, m2, m3, m4 = st.columns(4)
                 m1.metric("LLM Calls", agent_result.llm_calls)
                 m2.metric("Tool Calls", len(agent_result.tool_calls))
                 m3.metric("Latency", f"{agent_result.latency_seconds}s")
+                m4.metric("Cost", f"${agent_result.cost_usd:.4f}")
 
                 # Answer
                 st.markdown("**Answer:**")
@@ -299,6 +319,19 @@ if st.button("Compare", type="primary", use_container_width=True) and question:
 
             except Exception as e:
                 st.error(f"Agent Error: {e}")
+
+    # ── Audit log ──────────────────────────────────────────────────────────
+    if _rag_result and _agent_result:
+        log_query({
+            "question": question,
+            "rag_answer": _rag_result.answer[:200],
+            "rag_tokens": _rag_result.total_tokens,
+            "rag_cost_usd": round(_rag_result.cost_usd, 6),
+            "rag_confidence": round(_rag_result.confidence, 3),
+            "agent_tokens": _agent_result.total_tokens,
+            "agent_cost_usd": round(_agent_result.cost_usd, 6),
+            "agent_llm_calls": _agent_result.llm_calls,
+        })
 
 # Footer
 st.divider()

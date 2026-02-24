@@ -20,6 +20,8 @@ from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, System
 from langgraph.prebuilt import create_react_agent
 
 from agentic.tools import ALL_TOOLS
+from langchain_community.callbacks import get_openai_callback
+from shared.metrics import estimate_cost
 
 
 @dataclass
@@ -30,6 +32,9 @@ class AgenticResult:
     llm_calls: int = 0
     tool_calls: list[dict] = field(default_factory=list)
     total_tokens: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    cost_usd: float = 0.0
     latency_seconds: float = 0.0
     steps: list[str] = field(default_factory=list)
 
@@ -78,11 +83,16 @@ def run_agentic_pipeline(
         prompt=SYSTEM_PROMPT,
     )
 
-    # Run the agent
-    result = agent.invoke(
-        {"messages": [HumanMessage(content=question)]},
-        config={"recursion_limit": max_iterations * 2 + 1},
-    )
+    # Run the agent (track tokens/cost across all LLM calls)
+    with get_openai_callback() as cb:
+        result = agent.invoke(
+            {"messages": [HumanMessage(content=question)]},
+            config={"recursion_limit": max_iterations * 2 + 1},
+        )
+    prompt_tokens = cb.prompt_tokens
+    completion_tokens = cb.completion_tokens
+    total_tokens = cb.total_tokens
+    cost_usd = estimate_cost(model, prompt_tokens, completion_tokens)
 
     messages = result.get("messages", [])
 
@@ -121,6 +131,10 @@ def run_agentic_pipeline(
         answer=answer,
         llm_calls=llm_calls,
         tool_calls=tool_calls,
+        total_tokens=total_tokens,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        cost_usd=cost_usd,
         latency_seconds=round(elapsed, 2),
         steps=steps,
     )

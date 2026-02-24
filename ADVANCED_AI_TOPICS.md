@@ -1,8 +1,8 @@
-# Advanced AI Topics for Leaders
+# Advanced AI Topics for AI SMEs
 
 > Understanding the next frontier of AI capabilities
 
-This document explains 8 advanced AI concepts that distinguish leaders from engineers. Each concept includes a simple explanation and a deeper technical understanding, without implementation details.
+This document explains 8 advanced AI concepts that distinguish SMEs from engineers. Each concept includes a simple explanation and a deeper technical understanding, without implementation details.
 
 ---
 
@@ -12,7 +12,7 @@ This document explains 8 advanced AI concepts that distinguish leaders from engi
 
 Imagine you have two friends: one who answers questions very fast but sometimes makes mistakes, and another who answers more slowly but is usually right. How do you know which friend is actually better at answering questions? You need to **test them** with the same questions and **keep score** of who did better. That score is called **evaluation**.
 
-Right now, you might be comparing approaches by seeing them side-by-side, but you don't have a score. A leader **measures everything**.
+Right now, you might be comparing approaches by seeing them side-by-side, but you don't have a score. An advanced SME **measures everything**.
 
 ### The Technical Perspective
 
@@ -31,7 +31,7 @@ Evaluation frameworks measure how good an AI system actually is. The most popula
 
 ### Why This Matters
 
-A leader doesn't say "this approach worked well." A leader says: "Approach A has 92% accuracy and costs $0.03 per query, while Approach B has 88% accuracy and costs $0.12 per query. For simple questions, use A. For complex reasoning, use B." This is **data-driven thinking**.
+An AI SME doesn't say "this approach worked well." A SME says: "Approach A has 92% accuracy and costs $0.03 per query, while Approach B has 88% accuracy and costs $0.12 per query. For simple questions, use A. For complex reasoning, use B." This is **data-driven thinking**.
 
 ---
 
@@ -51,11 +51,11 @@ Your system currently uses **general-purpose AI models** — they work okay for 
 
 2. **Custom Embeddings**: Train a custom embedding model on your actual data. This learns what matters in **your** domain (e.g., in a programming context, "React" should be similar to "TypeScript").
 
-3. **Domain-Specific Measurement**: Your test questions come from actual use cases. A leader doesn't just measure general accuracy — they measure accuracy on what actually matters to their business.
+3. **Domain-Specific Measurement**: Your test questions come from actual use cases. A SME doesn't just measure general accuracy — they measure accuracy on what actually matters to their business.
 
 ### Why This Matters
 
-At enterprise scale, fine-tuning creates massive financial and performance advantages. A company with unlimited users doing millions of queries would save enormous amounts of money by switching to a specialized, fine-tuned approach rather than using expensive general-purpose models. Leadership thinking is about **financial impact** + **technical excellence**.
+At enterprise scale, fine-tuning creates massive financial and performance advantages. A company with unlimited users doing millions of queries would save enormous amounts of money by switching to a specialized, fine-tuned approach rather than using expensive general-purpose models. Good AI practices lead to thinking is about **financial impact** + **technical excellence**.
 
 ---
 
@@ -81,7 +81,7 @@ Large language models sometimes hallucinate — they make up facts that sound re
 
 ### Why This Matters
 
-If your AI system tells stakeholders something false, your credibility is destroyed. A leader implements **trust layers** that prevent hallucinations and make systems more reliable. This is critical for real-world applications where accuracy matters.
+If your AI system tells stakeholders something false, your credibility is destroyed. A SME implements **trust layers** that prevent hallucinations and make systems more reliable. This is critical for real-world applications where accuracy matters.
 
 ---
 
@@ -111,7 +111,7 @@ This creates a structured reasoning process where each step builds on previous k
 
 ### Why This Matters
 
-AI systems that reason step-by-step are more reliable, more auditable, and easier to debug. A leader builds systems where you can see exactly why a decision was made. This is **transparent AI** — crucial for trust and safety.
+AI systems that reason step-by-step are more reliable, more auditable, and easier to debug. A SME builds systems where you can see exactly why a decision was made. This is **transparent AI** — crucial for trust and safety.
 
 ---
 
@@ -140,7 +140,7 @@ This gives you both **semantic relevance** (finding documents about your topic) 
 
 ### Why This Matters
 
-Simple systems answer basic lookup questions. Advanced systems answer complex relationship questions. A leader's system can instantly answer "Show me all instances of X that have property Y" instead of just finding documents and making humans read through them. This is **structured intelligence**.
+Simple systems answer basic lookup questions. Advanced systems answer complex relationship questions. A SME's system can instantly answer "Show me all instances of X that have property Y" instead of just finding documents and making humans read through them. This is **structured intelligence**.
 
 ---
 
@@ -148,7 +148,7 @@ Simple systems answer basic lookup questions. Advanced systems answer complex re
 
 ### The Simple Explanation
 
-Imagine you're paying a consultant for each answer they provide. Each answer costs money. If you need 10 answers per question, that's expensive. A leader asks: "Can I get the same result with fewer questions?" That's **cost optimization**.
+Imagine you're paying a consultant for each answer they provide. Each answer costs money. If you need 10 answers per question, that's expensive. A SME asks: "Can I get the same result with fewer questions?" That's **cost optimization**.
 
 **Tracing** means writing down every single thing the system does (like a diary) so you can see exactly where money and time are being spent.
 
@@ -171,7 +171,7 @@ By tracing, you can identify:
 
 ### Why This Matters
 
-At enterprise scale with millions of queries, reducing cost per request by even 10% saves enormous amounts of money. Leadership is about **business impact**. A leader can say: "By optimizing X, we save $Y per year" — backed by data.
+At enterprise scale with millions of queries, reducing cost per request by even 10% saves enormous amounts of money. Being an AI expert within companies is about **business impact**. A SME can say: "By optimizing X, we save $Y per year" — backed by data.
 
 ---
 
@@ -198,7 +198,7 @@ Additional improvements include:
 
 ### Why This Matters
 
-User perception is everything. A 3-second streaming response feels faster than a 2-second full response because you see progress immediately. Leadership understands **user experience + technical excellence** — it's not enough to be fast, you need to *feel* fast.
+User perception is everything. A 3-second streaming response feels faster than a 2-second full response because you see progress immediately. Being an AI expert is understanding the **user experience + technical excellence** — it's not enough to be fast, you need to *feel* fast.
 
 ---
 
@@ -227,7 +227,7 @@ Advanced systems combine these:
 
 ### Why This Matters
 
-Most knowledge exists in multiple forms. Text alone misses diagrams, images, tables, and video. Advanced teams (building cutting-edge AI) work with all modalities. A leader who's worked with multi-modal systems is ahead of the curve — you understand the **full range of what AI can do**.
+Most knowledge exists in multiple forms. Text alone misses diagrams, images, tables, and video. Advanced teams (building cutting-edge AI) work with all modalities. A person who's worked with multi-modal systems is ahead of the curve — you understand the **full range of what AI can do**.
 
 ---
 
@@ -243,9 +243,3 @@ These 8 topics represent the frontier of practical AI:
 6. **Cost Optimization & Tracing**: Understand economics and efficiency
 7. **Streaming Responses**: Optimize user experience
 8. **Multi-modal Capabilities**: Process all types of information
-
-**What unites them all**: Leaders don't just build features. They **measure**, **optimize**, **structure**, and **understand trade-offs**. That's the difference between an engineer and a leader.
-
----
-
-Good luck with your friend's learning journey!
