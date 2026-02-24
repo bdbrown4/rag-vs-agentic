@@ -36,16 +36,19 @@ def _import_ragas():
     """Import RAGAS lazily to avoid slowing down other modules."""
     try:
         from ragas import evaluate as ragas_evaluate
-        from ragas.metrics import faithfulness, answer_relevancy
-        # context_precision (>=0.2) requires a reference answer; use the
-        # reference-free variant so we don't need ground-truth labels.
-        try:
-            from ragas.metrics import LLMContextPrecisionWithoutReference as context_precision
-        except ImportError:
-            # Older RAGAS builds — fall back to the original name
-            from ragas.metrics import context_precision  # type: ignore[assignment]
         from datasets import Dataset
-        return ragas_evaluate, faithfulness, answer_relevancy, context_precision, Dataset
+
+        # RAGAS >=0.2 requires *instantiated* metric objects.
+        from ragas.metrics import Faithfulness, ResponseRelevancy
+        try:
+            from ragas.metrics import LLMContextPrecisionWithoutReference
+            ctx_prec = LLMContextPrecisionWithoutReference()
+        except ImportError:
+            from ragas.metrics import ContextPrecision
+            ctx_prec = ContextPrecision()
+
+        metrics = [Faithfulness(), ResponseRelevancy(), ctx_prec]
+        return ragas_evaluate, metrics, Dataset
     except ImportError as exc:
         raise ImportError(
             "RAGAS is not installed. Run: pip install ragas>=0.2.0 datasets>=2.0.0"
@@ -110,9 +113,17 @@ def _run_agentic(question: str, max_iterations: int = 8) -> dict:
 
 # ── RAGAS scoring ─────────────────────────────────────────────────────────────
 
+def _get(row: "pd.Series", *keys: str, default: float = 0.0) -> float:
+    """Return the first key found in a pandas Series, supporting multiple name variants."""
+    for k in keys:
+        if k in row.index and row[k] == row[k]:  # also skips NaN
+            return float(row[k])
+    return default
+
+
 def _score_pipeline(records: list[dict]) -> pd.DataFrame:
     """Score a list of pipeline records with RAGAS metrics."""
-    ragas_evaluate, faithfulness, answer_relevancy, context_precision, Dataset = _import_ragas()
+    ragas_evaluate, metrics, Dataset = _import_ragas()
 
     dataset = Dataset.from_dict({
         "question":  [r["question"] for r in records],
@@ -120,16 +131,12 @@ def _score_pipeline(records: list[dict]) -> pd.DataFrame:
         "contexts":  [r["contexts"] for r in records],
     })
 
-    scores = ragas_evaluate(
-        dataset,
-        metrics=[faithfulness, answer_relevancy, context_precision],
-    )
+    scores = ragas_evaluate(dataset, metrics=metrics)
 
     # RAGAS >=0.2 returns an EvaluationResult; <=0.1 returned a dict-like.
     if hasattr(scores, "to_pandas"):
         score_df = scores.to_pandas()
     else:
-        import pandas as pd
         score_df = pd.DataFrame(scores)
     return score_df
 
@@ -200,18 +207,20 @@ def run_ragas_eval(
     rows = []
     for i, meta in enumerate(question_meta):
         row = {**meta}
-        # RAG columns
-        row["rag_faithfulness"]        = round(float(rag_scores.iloc[i].get("faithfulness", 0)), 3)
-        row["rag_answer_relevancy"]    = round(float(rag_scores.iloc[i].get("answer_relevancy", 0)), 3)
-        row["rag_context_precision"]   = round(float(rag_scores.iloc[i].get("context_precision", 0)), 3)
+        rr = rag_scores.iloc[i]
+        ar = agent_scores.iloc[i]
+        # RAG columns — handle both old and new RAGAS column names
+        row["rag_faithfulness"]        = round(_get(rr, "faithfulness"), 3)
+        row["rag_answer_relevancy"]    = round(_get(rr, "answer_relevancy", "response_relevancy"), 3)
+        row["rag_context_precision"]   = round(_get(rr, "llm_context_precision_without_reference", "context_precision"), 3)
         row["rag_tokens"]              = rag_records[i]["total_tokens"]
         row["rag_cost_usd"]            = round(rag_records[i]["cost_usd"], 6)
         row["rag_confidence"]          = round(rag_records[i].get("confidence", 0.0), 3)
         row["rag_latency_s"]           = rag_records[i]["latency_seconds"]
         # Agentic columns
-        row["agent_faithfulness"]      = round(float(agent_scores.iloc[i].get("faithfulness", 0)), 3)
-        row["agent_answer_relevancy"]  = round(float(agent_scores.iloc[i].get("answer_relevancy", 0)), 3)
-        row["agent_context_precision"] = round(float(agent_scores.iloc[i].get("context_precision", 0)), 3)
+        row["agent_faithfulness"]      = round(_get(ar, "faithfulness"), 3)
+        row["agent_answer_relevancy"]  = round(_get(ar, "answer_relevancy", "response_relevancy"), 3)
+        row["agent_context_precision"] = round(_get(ar, "llm_context_precision_without_reference", "context_precision"), 3)
         row["agent_tokens"]            = agent_records[i]["total_tokens"]
         row["agent_cost_usd"]          = round(agent_records[i]["cost_usd"], 6)
         row["agent_latency_s"]         = agent_records[i]["latency_seconds"]
