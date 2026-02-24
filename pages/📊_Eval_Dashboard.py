@@ -43,10 +43,68 @@ with st.sidebar:
 if "eval_df" not in st.session_state:
     st.session_state["eval_df"] = None
 
+import pandas as pd  # noqa: E402
+
+# ── Shared column helpers ─────────────────────────────────────────────────────
+_DISPLAY_COLS = [
+    "question_id", "tier", "question",
+    "rag_faithfulness", "rag_answer_relevancy", "rag_context_precision",
+    "rag_cost_usd", "rag_latency_s",
+    "agent_faithfulness", "agent_answer_relevancy", "agent_context_precision",
+    "agent_cost_usd", "agent_latency_s",
+]
+_FMT = {
+    "rag_faithfulness":        "{:.3f}",
+    "rag_answer_relevancy":    "{:.3f}",
+    "rag_context_precision":   "{:.3f}",
+    "rag_cost_usd":            "${:.5f}",
+    "rag_latency_s":           "{:.1f}s",
+    "agent_faithfulness":      "{:.3f}",
+    "agent_answer_relevancy":  "{:.3f}",
+    "agent_context_precision": "{:.3f}",
+    "agent_cost_usd":          "${:.5f}",
+    "agent_latency_s":         "{:.1f}s",
+}
+
+def _render_results(df: pd.DataFrame):
+    """Render summary metrics + table + charts for a (possibly partial) DataFrame."""
+    # Summary averages
+    st.subheader("Summary Averages")
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
+
+    def _avg(col: str) -> float:
+        return round(df[col].mean(), 3) if col in df.columns and len(df) else 0.0
+
+    col1.metric("RAG Faithful.",        _avg("rag_faithfulness"))
+    col2.metric("RAG Relevancy",        _avg("rag_answer_relevancy"))
+    col3.metric("RAG Ctx Precision",    _avg("rag_context_precision"))
+    col4.metric("Agent Faithful.",      _avg("agent_faithfulness"))
+    col5.metric("Agent Relevancy",      _avg("agent_answer_relevancy"))
+    col6.metric("Agent Ctx Precision",  _avg("agent_context_precision"))
+
+    rag_cost   = df["rag_cost_usd"].sum()   if "rag_cost_usd"   in df.columns else 0.0
+    agent_cost = df["agent_cost_usd"].sum() if "agent_cost_usd" in df.columns else 0.0
+    c1, c2, c3 = st.columns(3)
+    c1.metric("RAG Cost",   f"${rag_cost:.4f}")
+    c2.metric("Agent Cost", f"${agent_cost:.4f}")
+    c3.metric("Total Cost", f"${rag_cost + agent_cost:.4f}")
+
+    st.divider()
+
+    # Per-question table
+    st.subheader("Per-Question Results")
+    avail = [c for c in _DISPLAY_COLS if c in df.columns]
+    st.dataframe(
+        df[avail].style.format({k: v for k, v in _FMT.items() if k in avail}),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
 # ── Run evaluation ────────────────────────────────────────────────────────────
 if run_eval:
     try:
-        from evaluate.ragas_eval import run_ragas_eval
+        from evaluate.ragas_eval import run_ragas_eval_streaming
     except ImportError as exc:
         st.error(
             f"Could not import RAGAS evaluator: {exc}\n\n"
@@ -55,83 +113,71 @@ if run_eval:
         st.stop()
 
     questions_path = Path(__file__).parent.parent / "evaluate" / "questions.json"
+    st.session_state["eval_df"] = None  # clear previous run
 
-    with st.status("Running evaluation…", expanded=True) as status:
-        try:
-            st.write(f"Evaluating **{limit}** '{tier}' questions on both pipelines…")
-            df = run_ragas_eval(
-                questions_path=questions_path,
-                tier=tier,
-                limit=limit,
+    # ── Live streaming UI ─────────────────────────────────────────────────────
+    progress_bar   = st.progress(0, text="Starting…")
+    status_text    = st.empty()
+    results_header = st.empty()
+    summary_slot   = st.empty()   # live-updated summary + table
+    error_slot     = st.empty()
+
+    rows: list[dict] = []
+    failed = False
+
+    try:
+        gen = run_ragas_eval_streaming(
+            questions_path=questions_path,
+            tier=tier,
+            limit=limit,
+        )
+        for row in gen:
+            idx, total = row["_idx"], row["_total"]
+            clean = {k: v for k, v in row.items() if not k.startswith("_")}
+            rows.append(clean)
+
+            # Update progress bar
+            pct = (idx + 1) / total
+            progress_bar.progress(
+                pct,
+                text=f"Q{row['question_id']} scored — {idx+1}/{total} complete",
             )
-            st.session_state["eval_df"] = df
-            status.update(label=f"✅ Evaluation complete — {len(df)} questions scored", state="complete", expanded=False)
-        except Exception as exc:
-            status.update(label="❌ Evaluation failed", state="error", expanded=True)
-            st.error(str(exc))
-            st.stop()
+            status_text.caption(
+                f"**{row['question'][:80]}** → "
+                f"RAG faith {row['rag_faithfulness']:.2f} | "
+                f"Agent faith {row['agent_faithfulness']:.2f}"
+            )
 
-# ── Display results ───────────────────────────────────────────────────────────
+            # Re-render growing results table after every question
+            partial_df = pd.DataFrame(rows)
+            results_header.subheader(f"Results so far ({len(rows)}/{total})")
+            with summary_slot.container():
+                _render_results(partial_df)
+
+        # Done
+        progress_bar.progress(1.0, text="✅ Evaluation complete")
+        status_text.empty()
+        results_header.empty()
+        st.session_state["eval_df"] = pd.DataFrame(rows)
+
+    except Exception as exc:
+        failed = True
+        progress_bar.empty()
+        status_text.empty()
+        error_slot.error(f"❌ Evaluation failed: {exc}")
+        if rows:  # partial results are still useful
+            st.session_state["eval_df"] = pd.DataFrame(rows)
+
+# ── Display results (from session_state — survives reruns) ──────────────────
 df = st.session_state.get("eval_df")
 
-if df is None:
+if df is None or len(df) == 0:
     st.info("Configure settings in the sidebar and click **▶ Run Evaluation** to start.")
     st.stop()
 
-import pandas as pd  # noqa: E402  (imported after availability confirmed)
-
-# ── Summary metrics ───────────────────────────────────────────────────────────
-st.subheader("Summary Averages")
-col1, col2, col3, col4, col5, col6 = st.columns(6)
-
-def _avg(col: str) -> float:
-    return round(df[col].mean(), 3) if col in df.columns else 0.0
-
-col1.metric("RAG Faithfulness",        _avg("rag_faithfulness"))
-col2.metric("RAG Answer Relevancy",    _avg("rag_answer_relevancy"))
-col3.metric("RAG Context Precision",   _avg("rag_context_precision"))
-col4.metric("Agent Faithfulness",      _avg("agent_faithfulness"))
-col5.metric("Agent Answer Relevancy",  _avg("agent_answer_relevancy"))
-col6.metric("Agent Context Precision", _avg("agent_context_precision"))
-
-# Cost summary
-rag_total_cost   = df["rag_cost_usd"].sum()   if "rag_cost_usd"   in df.columns else 0.0
-agent_total_cost = df["agent_cost_usd"].sum() if "agent_cost_usd" in df.columns else 0.0
-c1, c2, c3 = st.columns(3)
-c1.metric("RAG Total Cost",    f"${rag_total_cost:.4f}")
-c2.metric("Agent Total Cost",  f"${agent_total_cost:.4f}")
-c3.metric("Total Eval Cost",   f"${rag_total_cost + agent_total_cost:.4f}")
-
-st.divider()
-
-# ── Per-question results table ────────────────────────────────────────────────
-st.subheader("Per-Question Results")
-
-display_cols = [
-    "question_id", "tier", "question",
-    "rag_faithfulness", "rag_answer_relevancy", "rag_context_precision",
-    "rag_cost_usd", "rag_latency_s",
-    "agent_faithfulness", "agent_answer_relevancy", "agent_context_precision",
-    "agent_cost_usd", "agent_latency_s",
-]
-available = [c for c in display_cols if c in df.columns]
-
-st.dataframe(
-    df[available].style.format({
-        "rag_faithfulness":        "{:.3f}",
-        "rag_answer_relevancy":    "{:.3f}",
-        "rag_context_precision":   "{:.3f}",
-        "rag_cost_usd":            "${:.5f}",
-        "rag_latency_s":           "{:.1f}s",
-        "agent_faithfulness":      "{:.3f}",
-        "agent_answer_relevancy":  "{:.3f}",
-        "agent_context_precision": "{:.3f}",
-        "agent_cost_usd":          "${:.5f}",
-        "agent_latency_s":         "{:.1f}s",
-    }),
-    use_container_width=True,
-    hide_index=True,
-)
+if not run_eval:
+    # Only re-render static result view when not mid-run (mid-run uses live slots above)
+    _render_results(df)
 
 st.divider()
 
@@ -141,30 +187,14 @@ st.subheader("Quality vs Cost Trade-off")
 try:
     import altair as alt
 
-    # Build long-form data for scatter
     scatter_rows = []
     for _, row in df.iterrows():
-        rag_quality   = (row.get("rag_faithfulness", 0) + row.get("rag_answer_relevancy", 0)) / 2
-        agent_quality = (row.get("agent_faithfulness", 0) + row.get("agent_answer_relevancy", 0)) / 2
-        scatter_rows.append({
-            "pipeline": "RAG",
-            "question": row["question"][:50] + "…",
-            "tier": row["tier"],
-            "quality_avg": round(rag_quality, 3),
-            "cost_usd": row.get("rag_cost_usd", 0),
-            "latency_s": row.get("rag_latency_s", 0),
-        })
-        scatter_rows.append({
-            "pipeline": "Agentic",
-            "question": row["question"][:50] + "…",
-            "tier": row["tier"],
-            "quality_avg": round(agent_quality, 3),
-            "cost_usd": row.get("agent_cost_usd", 0),
-            "latency_s": row.get("agent_latency_s", 0),
-        })
+        rag_q   = (row.get("rag_faithfulness", 0)   + row.get("rag_answer_relevancy", 0))   / 2
+        agent_q = (row.get("agent_faithfulness", 0) + row.get("agent_answer_relevancy", 0)) / 2
+        scatter_rows.append({"pipeline": "RAG",     "question": row["question"][:50] + "…", "tier": row["tier"], "quality_avg": round(rag_q, 3),   "cost_usd": row.get("rag_cost_usd", 0),   "latency_s": row.get("rag_latency_s", 0)})
+        scatter_rows.append({"pipeline": "Agentic", "question": row["question"][:50] + "…", "tier": row["tier"], "quality_avg": round(agent_q, 3), "cost_usd": row.get("agent_cost_usd", 0), "latency_s": row.get("agent_latency_s", 0)})
 
     scatter_df = pd.DataFrame(scatter_rows)
-
     chart = (
         alt.Chart(scatter_df)
         .mark_circle(size=120)
@@ -179,23 +209,17 @@ try:
         .interactive()
     )
     st.altair_chart(chart, use_container_width=True)
-
 except ImportError:
     st.caption("Install `altair` to see the scatter chart.")
-    st.dataframe(scatter_df if "scatter_df" in dir() else pd.DataFrame(), use_container_width=True)
 
 st.divider()
 
 # ── Score bars by tier ────────────────────────────────────────────────────────
 st.subheader("Scores by Question Tier")
-
-tier_agg = (
-    df.groupby("tier")[[
-        "rag_faithfulness", "rag_answer_relevancy",
-        "agent_faithfulness", "agent_answer_relevancy",
-    ]].mean().round(3)
-)
-st.dataframe(tier_agg, use_container_width=True)
+tier_cols = [c for c in ["rag_faithfulness", "rag_answer_relevancy", "agent_faithfulness", "agent_answer_relevancy"] if c in df.columns]
+if tier_cols:
+    tier_agg = df.groupby("tier")[tier_cols].mean().round(3)
+    st.dataframe(tier_agg, use_container_width=True)
 
 # ── Export ────────────────────────────────────────────────────────────────────
 st.divider()

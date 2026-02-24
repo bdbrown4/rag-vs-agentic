@@ -153,6 +153,99 @@ def _score_pipeline(records: list[dict]) -> pd.DataFrame:
     return score_df
 
 
+def _score_single(rec: dict) -> dict:
+    """Score a single pipeline record; returns a flat dict of metric scores."""
+    ragas_evaluate, metrics, Dataset = _import_ragas()
+    dataset = Dataset.from_dict({
+        "question": [rec["question"]],
+        "answer":   [rec["answer"]],
+        "contexts": [rec["contexts"]],
+    })
+    scores = ragas_evaluate(dataset, metrics=metrics)
+    if hasattr(scores, "to_pandas"):
+        row = scores.to_pandas().iloc[0]
+    else:
+        row = pd.DataFrame(scores).iloc[0]
+    return row  # pandas Series — use _get() to read values
+
+
+def run_ragas_eval_streaming(
+    questions_path: str | Path = Path(__file__).parent / "questions.json",
+    tier: str = "all",
+    limit: int | None = None,
+    rag_n_results: int = 5,
+    agent_max_iterations: int = 8,
+):
+    """
+    Generator version of run_ragas_eval.
+
+    Yields one result dict per question as soon as it is scored, so callers
+    can display live progress (e.g. Streamlit st.dataframe updates).
+
+    Each yielded dict has the same keys as a row from run_ragas_eval(), plus
+    a ``"_total"`` key on the first yield indicating how many questions will run.
+    """
+    questions = load_questions(questions_path, tier=tier, limit=limit)
+    total = len(questions)
+
+    for idx, q in enumerate(questions):
+        # ── Run RAG ──────────────────────────────────────────────────────────
+        try:
+            rag_rec = _run_rag(q["question"], n_results=rag_n_results)
+        except Exception as exc:
+            rag_rec = {
+                "question": q["question"], "answer": f"ERROR: {exc}",
+                "contexts": [], "llm_calls": 0, "total_tokens": 0,
+                "cost_usd": 0.0, "confidence": 0.0, "latency_seconds": 0.0,
+            }
+
+        # ── Run Agentic ───────────────────────────────────────────────────────
+        try:
+            agent_rec = _run_agentic(q["question"], max_iterations=agent_max_iterations)
+        except Exception as exc:
+            agent_rec = {
+                "question": q["question"], "answer": f"ERROR: {exc}",
+                "contexts": ["(error)"], "llm_calls": 0, "total_tokens": 0,
+                "cost_usd": 0.0, "latency_seconds": 0.0,
+            }
+
+        # ── RAGAS score (1-item datasets — fast, immediate) ───────────────────
+        try:
+            rag_scores  = _score_single(rag_rec)
+            agent_scores = _score_single(agent_rec)
+        except Exception as exc:
+            # Scoring failed — yield zeros so the UI still updates
+            import traceback
+            print(f"RAGAS scoring error Q{q['id']}: {traceback.format_exc()}")
+            empty = pd.Series(dtype=float)
+            rag_scores = agent_scores = empty
+
+        row = {
+            "question_id": q["id"],
+            "tier":        q["tier"],
+            "question":    q["question"],
+            # RAG
+            "rag_faithfulness":      round(_get(rag_scores,   "faithfulness"), 3),
+            "rag_answer_relevancy":  round(_get(rag_scores,   "answer_relevancy", "response_relevancy"), 3),
+            "rag_context_precision": round(_get(rag_scores,   "llm_context_precision_without_reference", "context_precision"), 3),
+            "rag_tokens":            rag_rec["total_tokens"],
+            "rag_cost_usd":          round(rag_rec["cost_usd"], 6),
+            "rag_confidence":        round(rag_rec.get("confidence", 0.0), 3),
+            "rag_latency_s":         rag_rec["latency_seconds"],
+            # Agentic
+            "agent_faithfulness":      round(_get(agent_scores, "faithfulness"), 3),
+            "agent_answer_relevancy":  round(_get(agent_scores, "answer_relevancy", "response_relevancy"), 3),
+            "agent_context_precision": round(_get(agent_scores, "llm_context_precision_without_reference", "context_precision"), 3),
+            "agent_tokens":            agent_rec["total_tokens"],
+            "agent_cost_usd":          round(agent_rec["cost_usd"], 6),
+            "agent_latency_s":         agent_rec["latency_seconds"],
+            # Metadata for progress tracking
+            "_idx":   idx,
+            "_total": total,
+        }
+        yield row
+
+
 # ── Main evaluation runner ────────────────────────────────────────────────────
 
 def run_ragas_eval(
@@ -164,80 +257,19 @@ def run_ragas_eval(
 ) -> pd.DataFrame:
     """
     Run RAGAS evaluation on both pipelines and return a merged DataFrame.
-
-    Returns:
-        DataFrame with columns: question_id, tier, question,
-            rag_faithfulness, rag_answer_relevancy, rag_context_precision,
-            rag_cost_usd, rag_latency_seconds,
-            agent_faithfulness, agent_answer_relevancy, agent_context_precision,
-            agent_cost_usd, agent_latency_seconds
+    Delegates to run_ragas_eval_streaming and collects all rows.
     """
-    questions = load_questions(questions_path, tier=tier, limit=limit)
-
-    rag_records: list[dict] = []
-    agent_records: list[dict] = []
-    question_meta: list[dict] = []
-
-    for q in questions:
-        print(f"Evaluating Q{q['id']} [{q['tier']}]: {q['question'][:60]}...")
-
-        try:
-            rag_rec = _run_rag(q["question"], n_results=rag_n_results)
-        except Exception as exc:
-            print(f"  RAG error: {exc}")
-            rag_rec = {
-                "question": q["question"],
-                "answer": f"ERROR: {exc}",
-                "contexts": [],
-                "llm_calls": 0, "total_tokens": 0, "cost_usd": 0.0,
-                "confidence": 0.0, "latency_seconds": 0.0,
-            }
-
-        try:
-            agent_rec = _run_agentic(q["question"], max_iterations=agent_max_iterations)
-        except Exception as exc:
-            print(f"  Agent error: {exc}")
-            agent_rec = {
-                "question": q["question"],
-                "answer": f"ERROR: {exc}",
-                "contexts": ["(error)"],
-                "llm_calls": 0, "total_tokens": 0, "cost_usd": 0.0,
-                "latency_seconds": 0.0,
-            }
-
-        rag_records.append(rag_rec)
-        agent_records.append(agent_rec)
-        question_meta.append({"question_id": q["id"], "tier": q["tier"], "question": q["question"]})
-
-    print("\nScoring RAG pipeline with RAGAS…")
-    rag_scores = _score_pipeline(rag_records)
-
-    print("Scoring Agentic pipeline with RAGAS…")
-    agent_scores = _score_pipeline(agent_records)
-
-    # Build merged DataFrame
     rows = []
-    for i, meta in enumerate(question_meta):
-        row = {**meta}
-        rr = rag_scores.iloc[i]
-        ar = agent_scores.iloc[i]
-        # RAG columns — handle both old and new RAGAS column names
-        row["rag_faithfulness"]        = round(_get(rr, "faithfulness"), 3)
-        row["rag_answer_relevancy"]    = round(_get(rr, "answer_relevancy", "response_relevancy"), 3)
-        row["rag_context_precision"]   = round(_get(rr, "llm_context_precision_without_reference", "context_precision"), 3)
-        row["rag_tokens"]              = rag_records[i]["total_tokens"]
-        row["rag_cost_usd"]            = round(rag_records[i]["cost_usd"], 6)
-        row["rag_confidence"]          = round(rag_records[i].get("confidence", 0.0), 3)
-        row["rag_latency_s"]           = rag_records[i]["latency_seconds"]
-        # Agentic columns
-        row["agent_faithfulness"]      = round(_get(ar, "faithfulness"), 3)
-        row["agent_answer_relevancy"]  = round(_get(ar, "answer_relevancy", "response_relevancy"), 3)
-        row["agent_context_precision"] = round(_get(ar, "llm_context_precision_without_reference", "context_precision"), 3)
-        row["agent_tokens"]            = agent_records[i]["total_tokens"]
-        row["agent_cost_usd"]          = round(agent_records[i]["cost_usd"], 6)
-        row["agent_latency_s"]         = agent_records[i]["latency_seconds"]
-        rows.append(row)
-
+    for row in run_ragas_eval_streaming(
+        questions_path=questions_path,
+        tier=tier,
+        limit=limit,
+        rag_n_results=rag_n_results,
+        agent_max_iterations=agent_max_iterations,
+    ):
+        clean = {k: v for k, v in row.items() if not k.startswith("_")}
+        rows.append(clean)
+        print(f"  Q{row['question_id']} scored ({row['_idx']+1}/{row['_total']})")
     return pd.DataFrame(rows)
 
 
