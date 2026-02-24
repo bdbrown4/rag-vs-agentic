@@ -6,6 +6,7 @@ langchain-openai>=0.2.0
 langchain-community>=0.3.0
 langchain-text-splitters>=0.3.0
 langgraph>=0.2.0
+langsmith>=0.1.0
 
 # Data fetching
 requests>=2.31.0

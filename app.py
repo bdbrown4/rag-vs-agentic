@@ -16,12 +16,16 @@ Auto-ingest:
 
 import json
 import os
+import random
 from pathlib import Path
 
 import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from shared.tracing import setup_tracing, record_trace, load_traces, clear_traces, trace_summary
+TRACE_STATUS = setup_tracing()
 
 # ── Dynamic allowlist helpers ─────────────────────────────────────────────────
 _ALLOWED_EMAILS_PATH = Path(__file__).parent / "data" / "allowed_emails.json"
@@ -121,6 +125,7 @@ chunk_count: int = st.session_state.kb_chunk_count
 from rag.pipeline import run_rag_pipeline
 from agentic.agent import run_agentic_pipeline
 from shared.metrics import confidence_label, log_query, load_query_log, clear_query_log
+from shared.guardrails import confidence_from_schema
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 st.title("RAG vs Agentic Retrieval")
@@ -188,12 +193,35 @@ with st.sidebar:
                     for _entry in _qlog[:5]:
                         st.json(_entry, expanded=False)
 
+                    st.divider()
+                    st.markdown("**🔍 Trace Log**")
+                    st.caption(f"Status: {TRACE_STATUS}")
+                    _tsummary = trace_summary()
+                    if _tsummary:
+                        for _pipe, _stats in _tsummary.items():
+                            st.caption(
+                                f"{_pipe}: {_stats['count']} runs · "
+                                f"avg ${_stats['avg_cost']:.4f} · avg {_stats['avg_latency']:.1f}s"
+                            )
+                    if st.button("🗑️ Clear Traces", width='stretch', key="clear_traces"):
+                        clear_traces()
+                        st.success("Traces cleared")
+                        st.rerun()
+                    for _tr in load_traces(3):
+                        st.json(_tr, expanded=False)
+
                 st.divider()
 
     st.caption(f"Knowledge base: **{chunk_count:,} chunks**")
     st.header("Settings")
     n_results = st.slider("RAG: Chunks to retrieve", 1, 10, 5)
     max_iterations = st.slider("Agent: Max iterations", 1, 15, 8)
+
+    pipeline_mode = st.selectbox("Mode", ["Compare Both", "A/B Test"])
+    if pipeline_mode == "A/B Test":
+        if "ab_group" not in st.session_state:
+            st.session_state["ab_group"] = random.choice(["rag", "agentic"])
+        st.caption(f"A/B group: **{st.session_state['ab_group']}** (fixed per session)")
 
     st.divider()
     st.header("Sample Questions")
@@ -232,38 +260,87 @@ if st.button("Compare", type="primary", width='stretch') and question:
     st.session_state.pop("compare_rag_error", None)
     st.session_state.pop("compare_agent_error", None)
 
-    with st.spinner("Retrieving & generating (RAG)..."):
-        try:
-            st.session_state["compare_rag"] = run_rag_pipeline(question, n_results=n_results)
-        except Exception as e:
-            st.session_state["compare_rag"] = None
-            st.session_state["compare_rag_error"] = str(e)
+    ab_group = st.session_state.get("ab_group", None) if pipeline_mode == "A/B Test" else None
+    run_rag = (pipeline_mode == "Compare Both") or (ab_group == "rag")
+    run_agent = (pipeline_mode == "Compare Both") or (ab_group == "agentic")
 
-    with st.spinner("Agent is thinking..."):
-        try:
-            st.session_state["compare_agent"] = run_agentic_pipeline(
-                question, max_iterations=max_iterations, verbose=False
-            )
-        except Exception as e:
-            st.session_state["compare_agent"] = None
-            st.session_state["compare_agent_error"] = str(e)
+    if run_rag:
+        with st.spinner("Retrieving & generating (RAG)..."):
+            try:
+                st.session_state["compare_rag"] = run_rag_pipeline(question, n_results=n_results)
+            except Exception as e:
+                st.session_state["compare_rag"] = None
+                st.session_state["compare_rag_error"] = str(e)
+    else:
+        st.session_state.pop("compare_rag", None)
+
+    if run_agent:
+        with st.spinner("Agent is thinking..."):
+            try:
+                st.session_state["compare_agent"] = run_agentic_pipeline(
+                    question, max_iterations=max_iterations, verbose=False
+                )
+            except Exception as e:
+                st.session_state["compare_agent"] = None
+                st.session_state["compare_agent_error"] = str(e)
+    else:
+        st.session_state.pop("compare_agent", None)
 
     st.session_state["compare_question"] = question
+    st.session_state["compare_pipeline_mode"] = pipeline_mode
 
-    # ── Audit log (written once, here, before any rerun) ──────────────────
+    # ── Audit log + tracing ───────────────────────────────────────────────
     _r = st.session_state.get("compare_rag")
     _a = st.session_state.get("compare_agent")
-    if _r and _a:
+
+    if _r:
         log_query({
             "question": question,
+            "pipeline": "rag",
+            "ab_group": ab_group,
             "rag_answer": _r.answer[:200],
             "rag_tokens": _r.total_tokens,
             "rag_cost_usd": round(_r.cost_usd, 6),
             "rag_confidence": round(_r.confidence, 3),
+        })
+        record_trace(
+            pipeline="rag",
+            question=question,
+            answer=_r.answer,
+            prompt_tokens=_r.prompt_tokens,
+            completion_tokens=_r.completion_tokens,
+            cost_usd=_r.cost_usd,
+            latency_seconds=_r.latency_seconds,
+            tool_calls=[],
+            confidence=_r.confidence,
+            ab_group=ab_group,
+        )
+
+    if _a:
+        log_query({
+            "question": question,
+            "pipeline": "agentic",
+            "ab_group": ab_group,
             "agent_tokens": _a.total_tokens,
             "agent_cost_usd": round(_a.cost_usd, 6),
             "agent_llm_calls": _a.llm_calls,
         })
+        _ag_conf = (
+            confidence_from_schema(_a.guardrails.confidence)
+            if _a.guardrails else 0.5
+        )
+        record_trace(
+            pipeline="agentic",
+            question=question,
+            answer=_a.answer,
+            prompt_tokens=_a.prompt_tokens,
+            completion_tokens=_a.completion_tokens,
+            cost_usd=_a.cost_usd,
+            latency_seconds=_a.latency_seconds,
+            tool_calls=_a.tool_calls,
+            confidence=_ag_conf,
+            ab_group=ab_group,
+        )
 
 # ── Results (rendered from session_state — survives file-watcher reruns) ──────
 if "compare_question" in st.session_state:
@@ -289,6 +366,9 @@ if "compare_question" in st.session_state:
             m4.metric("Cost", f"${rag_result.cost_usd:.4f}")
             _emoji, _label = confidence_label(rag_result.confidence)
             st.caption(f"Confidence: {_emoji} {_label} ({rag_result.confidence:.2f})")
+
+            if getattr(rag_result, "uncertainty_note", None):
+                st.warning(f"⚠️ {rag_result.uncertainty_note}")
 
             st.markdown("**Answer:**")
             st.markdown(rag_result.answer)
@@ -321,6 +401,13 @@ if "compare_question" in st.session_state:
             m3.metric("Latency", f"{agent_result.latency_seconds}s")
             m4.metric("Cost", f"${agent_result.cost_usd:.4f}")
 
+            if getattr(agent_result, "plan", None):
+                with st.expander("📋 Agent Plan", expanded=False):
+                    st.markdown(agent_result.plan)
+
+            if agent_result.guardrails and agent_result.guardrails.uncertainty_note:
+                st.warning(f"⚠️ {agent_result.guardrails.uncertainty_note}")
+
             st.markdown("**Answer:**")
             st.markdown(agent_result.answer)
 
@@ -345,6 +432,6 @@ if "compare_question" in st.session_state:
 st.divider()
 st.caption(
     "This app compares two retrieval strategies on the same ChromaDB knowledge base. "
-    "RAG performs a single retrieve-then-generate pass, while the agentic approach "
-    "uses a ReAct agent that decides when and what to retrieve iteratively."
+    "RAG uses Pydantic-validated structured output with confidence gating. The agentic "
+    "pipeline uses a LangGraph PLANNER→EXECUTOR→SYNTHESIZER graph with explicit plan generation."
 )
