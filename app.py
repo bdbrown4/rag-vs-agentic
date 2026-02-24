@@ -197,12 +197,15 @@ with st.sidebar:
                     st.markdown("**🔍 Trace Log**")
                     st.caption(f"Status: {TRACE_STATUS}")
                     _tsummary = trace_summary()
-                    if _tsummary:
-                        for _pipe, _stats in _tsummary.items():
+                    _by_pipeline = _tsummary.get("by_pipeline", {})
+                    if _by_pipeline:
+                        for _pipe, _stats in _by_pipeline.items():
                             st.caption(
                                 f"{_pipe}: {_stats['count']} runs · "
                                 f"avg ${_stats['avg_cost']:.4f} · avg {_stats['avg_latency']:.1f}s"
                             )
+                    elif _tsummary.get("count", 0) == 0:
+                        st.caption("No traces recorded yet.")
                     if st.button("🗑️ Clear Traces", width='stretch', key="clear_traces"):
                         clear_traces()
                         st.success("Traces cleared")
