@@ -157,7 +157,7 @@ def _render_scores_table(df: pd.DataFrame):
     avail = [c for c in _TABLE_COLS if c in df.columns]
     st.dataframe(
         df[avail].style.format({k: v for k, v in _FMT.items() if k in avail}),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
@@ -257,7 +257,7 @@ def _render_tier_breakdown(df: pd.DataFrame):
     tier_cols = [c for c in _SCORE_COLS if c in df.columns]
     if tier_cols and "tier" in df.columns and df["tier"].nunique() > 0:
         tier_agg = df.groupby("tier")[tier_cols].mean().round(3)
-        st.dataframe(tier_agg, use_container_width=True)
+        st.dataframe(tier_agg, width="stretch")
     else:
         st.caption("Run questions across multiple tiers to see a breakdown here.")
 
