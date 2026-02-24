@@ -37,17 +37,29 @@ def _import_ragas():
     try:
         from ragas import evaluate as ragas_evaluate
         from datasets import Dataset
-
-        # RAGAS >=0.2 requires *instantiated* metric objects.
         from ragas.metrics import Faithfulness, ResponseRelevancy
+        from ragas.llms import LangchainLLMWrapper
+        from ragas.embeddings import LangchainEmbeddingsWrapper
+        from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+
+        # RAGAS >=0.2 requires explicitly-wired LLM and embeddings wrappers.
+        # Without them ResponseRelevancy falls back to its own OpenAIEmbeddings
+        # stub that is missing .embed_query().
+        ragas_llm = LangchainLLMWrapper(ChatOpenAI(model="gpt-4o-mini", temperature=0))
+        ragas_emb = LangchainEmbeddingsWrapper(OpenAIEmbeddings(model="text-embedding-3-small"))
+
         try:
             from ragas.metrics import LLMContextPrecisionWithoutReference
-            ctx_prec = LLMContextPrecisionWithoutReference()
+            ctx_prec = LLMContextPrecisionWithoutReference(llm=ragas_llm)
         except ImportError:
             from ragas.metrics import ContextPrecision
-            ctx_prec = ContextPrecision()
+            ctx_prec = ContextPrecision(llm=ragas_llm)
 
-        metrics = [Faithfulness(), ResponseRelevancy(), ctx_prec]
+        metrics = [
+            Faithfulness(llm=ragas_llm),
+            ResponseRelevancy(llm=ragas_llm, embeddings=ragas_emb),
+            ctx_prec,
+        ]
         return ragas_evaluate, metrics, Dataset
     except ImportError as exc:
         raise ImportError(

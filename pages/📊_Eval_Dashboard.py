@@ -128,11 +128,7 @@ st.dataframe(
         "agent_context_precision": "{:.3f}",
         "agent_cost_usd":          "${:.5f}",
         "agent_latency_s":         "{:.1f}s",
-    }).background_gradient(
-        subset=[c for c in ["rag_faithfulness", "rag_answer_relevancy", "agent_faithfulness", "agent_answer_relevancy"] if c in df.columns],
-        cmap="RdYlGn",
-        vmin=0, vmax=1,
-    ),
+    }),
     use_container_width=True,
     hide_index=True,
 )
