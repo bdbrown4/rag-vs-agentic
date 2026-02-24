@@ -106,7 +106,7 @@ def _delta(df: pd.DataFrame, rag_col: str, agent_col: str) -> str | None:
 def _render_summary_metrics(df: pd.DataFrame):
     st.markdown(
         """
-        #### ðŸ“ RAGAS Score Averages
+        #### 📐 RAGAS Score Averages
         These three metrics are scored by an LLM judge — the industry-standard way to evaluate
         retrieval systems without hand-labeled ground truth:
 
@@ -245,7 +245,7 @@ def _render_scatter(df: pd.DataFrame):
 def _render_tier_breakdown(df: pd.DataFrame):
     st.markdown(
         """
-        #### ðŸ·️ Scores by Question Tier
+        #### 🏷️ Scores by Question Tier
         Not all questions are equally hard. **Simple** questions should be easy for both pipelines.
         **Multi-hop** questions require combining facts across documents — this is where the agentic
         pipeline's iterative search typically pays off. **Ambiguous** questions require synthesis;
@@ -345,7 +345,7 @@ if run_eval:
     except Exception as exc:
         progress_bar.empty()
         status_text.empty()
-        st.error(f"âŒ Evaluation error: {exc}")
+        st.error(f"❌ Evaluation error: {exc}")
         if rows:
             st.session_state["eval_df"] = pd.DataFrame(rows)
             live_slot.empty()

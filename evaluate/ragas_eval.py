@@ -70,12 +70,27 @@ def _import_ragas():
 # ── Data loading ──────────────────────────────────────────────────────────────
 
 def load_questions(path: str | Path, tier: str = "all", limit: int | None = None) -> list[dict]:
-    """Load evaluation questions filtered by tier."""
+    """Load evaluation questions filtered by tier.
+
+    When tier=='all', questions are interleaved across tiers so that any
+    limit value still returns a representative mix of simple/multi-hop/ambiguous.
+    """
     with open(path, "r") as f:
         data = json.load(f)
     questions = data["questions"]
     if tier != "all":
         questions = [q for q in questions if q["tier"] == tier]
+    else:
+        # Group by tier then interleave round-robin so limit gives a tier mix
+        from itertools import zip_longest
+        groups: dict[str, list] = {}
+        for q in questions:
+            groups.setdefault(q["tier"], []).append(q)
+        interleaved = [
+            q for row in zip_longest(*groups.values())
+            for q in row if q is not None
+        ]
+        questions = interleaved
     if limit:
         questions = questions[:limit]
     return questions
