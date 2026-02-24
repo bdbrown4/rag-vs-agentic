@@ -60,7 +60,7 @@ with st.sidebar:
         "Each question costs roughly $0.01–0.05 in OpenAI tokens."
     )
     st.divider()
-    run_eval = st.button("▶ Run Evaluation", type="primary", use_container_width=True)
+    run_eval = st.button("▶ Run Evaluation", type="primary", width="stretch")
 
 # ── Session state init ────────────────────────────────────────────────────────
 if "eval_df" not in st.session_state:
