@@ -61,6 +61,10 @@ with st.sidebar:
     )
     st.divider()
     run_eval = st.button("▶ Run Evaluation", type="primary", width="stretch")
+    if st.button("🗑️ Clear Results", width="stretch"):
+        st.session_state["eval_df"] = None
+        st.success("Results cleared!")
+        st.rerun()
 
 # ── Session state init ────────────────────────────────────────────────────────
 if "eval_df" not in st.session_state:
