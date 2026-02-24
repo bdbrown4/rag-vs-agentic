@@ -312,6 +312,8 @@ if run_eval:
 
     rows: list[dict] = []
 
+    error_slot = st.empty()
+
     try:
         gen = run_ragas_eval_streaming(
             questions_path=questions_path,
@@ -346,23 +348,33 @@ if run_eval:
                 st.divider()
                 _render_question_details(partial_df)
 
-        # Completed — clean up live widgets and do a full re-render
-        progress_bar.progress(1.0, text=f"✅ Complete — {len(rows)} questions scored")
-        status_text.empty()
-        live_slot.empty()
-        st.session_state["eval_df"] = pd.DataFrame(rows)
-        st.rerun()
+        # Completed — store results then rerun for clean full render
+        if rows:
+            progress_bar.progress(1.0, text=f"✅ Complete — {len(rows)} questions scored")
+            status_text.empty()
+            live_slot.empty()
+            st.session_state["eval_df"] = pd.DataFrame(rows)
+            st.rerun()
+        else:
+            progress_bar.empty()
+            status_text.empty()
+            error_slot.warning(
+                "⚠️ No questions were returned for the selected tier/limit. "
+                "Try changing the tier or increasing the limit."
+            )
 
     except Exception as exc:
-        progress_bar.empty()
+        import traceback
+        progress_bar.progress(0, text="❌ Evaluation failed — see error below")
         status_text.empty()
-        st.error(f"❌ Evaluation error: {exc}")
+        error_slot.error(f"❌ Evaluation error: {exc}")
+        with st.expander("🔍 Full traceback (click to expand)", expanded=True):
+            st.code(traceback.format_exc(), language="python")
         if rows:
             st.session_state["eval_df"] = pd.DataFrame(rows)
             live_slot.empty()
             st.warning(f"Showing partial results — {len(rows)} questions completed before the error.")
             _render_full_results(st.session_state["eval_df"])
-        st.stop()
 
 # ── Static display (from session_state — survives reruns) ────────────────────
 df = st.session_state.get("eval_df")
