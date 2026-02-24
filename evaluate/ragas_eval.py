@@ -23,7 +23,9 @@ from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+_project_root = str(Path(__file__).parent.parent)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -34,7 +36,14 @@ def _import_ragas():
     """Import RAGAS lazily to avoid slowing down other modules."""
     try:
         from ragas import evaluate as ragas_evaluate
-        from ragas.metrics import faithfulness, answer_relevancy, context_precision
+        from ragas.metrics import faithfulness, answer_relevancy
+        # context_precision (>=0.2) requires a reference answer; use the
+        # reference-free variant so we don't need ground-truth labels.
+        try:
+            from ragas.metrics import LLMContextPrecisionWithoutReference as context_precision
+        except ImportError:
+            # Older RAGAS builds — fall back to the original name
+            from ragas.metrics import context_precision  # type: ignore[assignment]
         from datasets import Dataset
         return ragas_evaluate, faithfulness, answer_relevancy, context_precision, Dataset
     except ImportError as exc:
@@ -116,7 +125,12 @@ def _score_pipeline(records: list[dict]) -> pd.DataFrame:
         metrics=[faithfulness, answer_relevancy, context_precision],
     )
 
-    score_df = scores.to_pandas()
+    # RAGAS >=0.2 returns an EvaluationResult; <=0.1 returned a dict-like.
+    if hasattr(scores, "to_pandas"):
+        score_df = scores.to_pandas()
+    else:
+        import pandas as pd
+        score_df = pd.DataFrame(scores)
     return score_df
 
 

@@ -12,8 +12,11 @@ from pathlib import Path
 
 import streamlit as st
 
-# Make project root importable when running as a page
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Make project root importable when running as a page.
+# Idempotent — avoids corrupting sys.modules in Streamlit's shared MPA process.
+_project_root = str(Path(__file__).parent.parent)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from dotenv import load_dotenv
 load_dotenv()
