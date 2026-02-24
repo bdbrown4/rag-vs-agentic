@@ -169,16 +169,26 @@ if run_btn and question and models_to_run:
                     confidence   = res.confidence
                     prompt_tok   = res.prompt_tokens
                     completion_tok = res.completion_tokens
-                    retrieved    = res.retrieved_chunks
+                    retrieved    = res.retrieved_chunks   # list of {"text":…, "metadata":{…}}
                     guardrail    = res.uncertainty_note or ""
+                    # Flatten for RAGAS
+                    contexts = [c.get("text", c.get("content", "")) for c in retrieved]
                 else:
                     res = run_agentic_pipeline(question=question, model=model_id)
                     answer       = res.answer
-                    confidence   = res.confidence
+                    confidence   = res.guardrails.confidence if res.guardrails else "medium"
                     prompt_tok   = res.prompt_tokens
                     completion_tok = res.completion_tokens
-                    retrieved    = res.retrieved_chunks
-                    guardrail    = res.uncertainty_note or ""
+                    # Build pseudo-chunks from tool call outputs for RAGAS context
+                    retrieved    = [
+                        {"content": tc.get("output_full", tc.get("output_preview", "")),
+                         "repo_name": tc.get("tool", "agent"),
+                         "distance": "—"}
+                        for tc in res.tool_calls
+                    ]
+                    guardrail    = res.guardrails.uncertainty_note if res.guardrails else ""
+                    # Flatten tool call outputs as RAGAS contexts
+                    contexts = [tc.get("output_full", tc.get("output_preview", "")) for tc in res.tool_calls]
 
                 elapsed  = time.time() - t0
                 cost_usd = _estimate_cost(model_id, prompt_tok, completion_tok)
@@ -188,10 +198,20 @@ if run_btn and question and models_to_run:
                 record = {
                     "question": question,
                     "answer":   answer,
-                    "contexts": [c.get("content", "") for c in retrieved],
+                    "contexts": contexts,
                     "pipeline": pipeline_type.lower(),
                 }
                 scores = _score_single(record)
+
+                # Normalize chunks to a consistent shape for display
+                display_chunks = [
+                    {
+                        "content":   c.get("text", c.get("content", "")),
+                        "repo_name": c.get("repo_name") or (c.get("metadata") or {}).get("repo_name", "unknown"),
+                        "distance":  c.get("distance", "—"),
+                    }
+                    for c in retrieved
+                ]
 
                 results.append({
                     "model_id":         model_id,
@@ -206,7 +226,7 @@ if run_btn and question and models_to_run:
                     "cost_usd":         cost_usd,
                     "faithfulness":     scores.get("faithfulness", 0.0),
                     "answer_relevancy": scores.get("answer_relevancy", 0.0),
-                    "retrieved":        retrieved,
+                    "retrieved":        display_chunks,
                 })
                 s.update(
                     label=f"✅ {model_label} — {elapsed:.1f}s, ${cost_usd:.5f}",
@@ -485,7 +505,8 @@ grounded in facts equally well. The relevancy difference tells you which model i
                 for j, chunk in enumerate(r["retrieved"][:3], 1):
                     repo   = chunk.get("repo_name", "unknown")
                     dist   = chunk.get("distance", "?")
-                    preview = (chunk.get("content", "")[:200] + "…") if chunk.get("content") else "—"
+                    text   = chunk.get("content", "")
+                    preview = (text[:200] + "…") if text else "—"
                     st.caption(f"  Chunk {j}: [{repo}]  similarity={dist}  — {preview}")
 
 elif not run_btn:
