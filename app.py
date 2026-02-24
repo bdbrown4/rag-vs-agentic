@@ -227,111 +227,119 @@ question = st.text_input(
 )
 
 if st.button("Compare", type="primary", use_container_width=True) and question:
-    _rag_result = None
-    _agent_result = None
+    # Run both pipelines and store results in session_state so they survive
+    # Streamlit reruns (e.g. the file-watcher rerun triggered by log_query()).
+    st.session_state.pop("compare_rag_error", None)
+    st.session_state.pop("compare_agent_error", None)
+
+    with st.spinner("Retrieving & generating (RAG)..."):
+        try:
+            st.session_state["compare_rag"] = run_rag_pipeline(question, n_results=n_results)
+        except Exception as e:
+            st.session_state["compare_rag"] = None
+            st.session_state["compare_rag_error"] = str(e)
+
+    with st.spinner("Agent is thinking..."):
+        try:
+            st.session_state["compare_agent"] = run_agentic_pipeline(
+                question, max_iterations=max_iterations, verbose=False
+            )
+        except Exception as e:
+            st.session_state["compare_agent"] = None
+            st.session_state["compare_agent_error"] = str(e)
+
+    st.session_state["compare_question"] = question
+
+    # ── Audit log (written once, here, before any rerun) ──────────────────
+    _r = st.session_state.get("compare_rag")
+    _a = st.session_state.get("compare_agent")
+    if _r and _a:
+        log_query({
+            "question": question,
+            "rag_answer": _r.answer[:200],
+            "rag_tokens": _r.total_tokens,
+            "rag_cost_usd": round(_r.cost_usd, 6),
+            "rag_confidence": round(_r.confidence, 3),
+            "agent_tokens": _a.total_tokens,
+            "agent_cost_usd": round(_a.cost_usd, 6),
+            "agent_llm_calls": _a.llm_calls,
+        })
+
+# ── Results (rendered from session_state — survives file-watcher reruns) ──────
+if "compare_question" in st.session_state:
+    rag_result   = st.session_state.get("compare_rag")
+    agent_result = st.session_state.get("compare_agent")
+    rag_err      = st.session_state.get("compare_rag_error")
+    agent_err    = st.session_state.get("compare_agent_error")
+
     col_rag, col_agent = st.columns(2)
 
     # --- RAG Column ---
     with col_rag:
         st.subheader("Classic RAG")
-        with st.spinner("Retrieving & generating..."):
-            try:
-                rag_result = run_rag_pipeline(question, n_results=n_results)
-                _rag_result = rag_result
+        if rag_err:
+            st.error(f"RAG Error: {rag_err}")
+        elif rag_result:
+            st.success(f"Done in {rag_result.latency_seconds}s")
 
-                st.success(f"Done in {rag_result.latency_seconds}s")
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("LLM Calls", rag_result.llm_calls)
+            m2.metric("Tokens", rag_result.total_tokens)
+            m3.metric("Chunks", len(rag_result.retrieved_chunks))
+            m4.metric("Cost", f"${rag_result.cost_usd:.4f}")
+            _emoji, _label = confidence_label(rag_result.confidence)
+            st.caption(f"Confidence: {_emoji} {_label} ({rag_result.confidence:.2f})")
 
-                # Metrics
-                m1, m2, m3, m4 = st.columns(4)
-                m1.metric("LLM Calls", rag_result.llm_calls)
-                m2.metric("Tokens", rag_result.total_tokens)
-                m3.metric("Chunks", len(rag_result.retrieved_chunks))
-                m4.metric("Cost", f"${rag_result.cost_usd:.4f}")
-                _emoji, _label = confidence_label(rag_result.confidence)
-                st.caption(f"Confidence: {_emoji} {_label} ({rag_result.confidence:.2f})")
+            st.markdown("**Answer:**")
+            st.markdown(rag_result.answer)
 
-                # Answer
-                st.markdown("**Answer:**")
-                st.markdown(rag_result.answer)
+            with st.expander("Retrieval Trace"):
+                for step in rag_result.steps:
+                    st.text(step)
 
-                # Trace
-                with st.expander("Retrieval Trace"):
-                    for step in rag_result.steps:
-                        st.text(step)
-
-                # Retrieved chunks
-                with st.expander("Retrieved Chunks"):
-                    for chunk in rag_result.retrieved_chunks:
-                        repo = chunk["metadata"].get("repo_name", "unknown")
-                        fpath = chunk["metadata"].get("file_path", "")
-                        dist = round(chunk["distance"], 3)
-                        label = f"{repo}/{fpath}" if fpath else repo
-                        st.markdown(f"**{label}** (distance: {dist})")
-                        st.code(chunk["text"][:300], language="markdown")
-                        st.divider()
-
-            except Exception as e:
-                st.error(f"RAG Error: {e}")
+            with st.expander("Retrieved Chunks"):
+                for chunk in rag_result.retrieved_chunks:
+                    repo = chunk["metadata"].get("repo_name", "unknown")
+                    fpath = chunk["metadata"].get("file_path", "")
+                    dist = round(chunk["distance"], 3)
+                    lbl = f"{repo}/{fpath}" if fpath else repo
+                    st.markdown(f"**{lbl}** (distance: {dist})")
+                    st.code(chunk["text"][:300], language="markdown")
+                    st.divider()
 
     # --- Agentic Column ---
     with col_agent:
         st.subheader("Agentic Retrieval")
-        with st.spinner("Agent is thinking..."):
-            try:
-                agent_result = run_agentic_pipeline(
-                    question,
-                    max_iterations=max_iterations,
-                    verbose=False,
-                )
-                _agent_result = agent_result
+        if agent_err:
+            st.error(f"Agent Error: {agent_err}")
+        elif agent_result:
+            st.success(f"Done in {agent_result.latency_seconds}s")
 
-                st.success(f"Done in {agent_result.latency_seconds}s")
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("LLM Calls", agent_result.llm_calls)
+            m2.metric("Tool Calls", len(agent_result.tool_calls))
+            m3.metric("Latency", f"{agent_result.latency_seconds}s")
+            m4.metric("Cost", f"${agent_result.cost_usd:.4f}")
 
-                # Metrics
-                m1, m2, m3, m4 = st.columns(4)
-                m1.metric("LLM Calls", agent_result.llm_calls)
-                m2.metric("Tool Calls", len(agent_result.tool_calls))
-                m3.metric("Latency", f"{agent_result.latency_seconds}s")
-                m4.metric("Cost", f"${agent_result.cost_usd:.4f}")
+            st.markdown("**Answer:**")
+            st.markdown(agent_result.answer)
 
-                # Answer
-                st.markdown("**Answer:**")
-                st.markdown(agent_result.answer)
+            with st.expander("Agent Reasoning Trace"):
+                for step in agent_result.steps:
+                    if step.startswith("THOUGHT"):
+                        st.info(step)
+                    elif step.startswith("ACTION"):
+                        st.warning(step)
+                    elif step.startswith("OBSERVATION"):
+                        st.success(step)
+                    else:
+                        st.text(step)
 
-                # Reasoning trace
-                with st.expander("Agent Reasoning Trace"):
-                    for step in agent_result.steps:
-                        if step.startswith("THOUGHT"):
-                            st.info(step)
-                        elif step.startswith("ACTION"):
-                            st.warning(step)
-                        elif step.startswith("OBSERVATION"):
-                            st.success(step)
-                        else:
-                            st.text(step)
-
-                # Tool calls detail
-                with st.expander("Tool Call Details"):
-                    for tc in agent_result.tool_calls:
-                        st.markdown(f"**{tc['tool']}**(`{tc['input']}`)")
-                        st.code(tc["output_preview"], language="text")
-                        st.divider()
-
-            except Exception as e:
-                st.error(f"Agent Error: {e}")
-
-    # ── Audit log ──────────────────────────────────────────────────────────
-    if _rag_result and _agent_result:
-        log_query({
-            "question": question,
-            "rag_answer": _rag_result.answer[:200],
-            "rag_tokens": _rag_result.total_tokens,
-            "rag_cost_usd": round(_rag_result.cost_usd, 6),
-            "rag_confidence": round(_rag_result.confidence, 3),
-            "agent_tokens": _agent_result.total_tokens,
-            "agent_cost_usd": round(_agent_result.cost_usd, 6),
-            "agent_llm_calls": _agent_result.llm_calls,
-        })
+            with st.expander("Tool Call Details"):
+                for tc in agent_result.tool_calls:
+                    st.markdown(f"**{tc['tool']}**(`{tc['input']}`)")
+                    st.code(tc["output_preview"], language="text")
+                    st.divider()
 
 # Footer
 st.divider()
