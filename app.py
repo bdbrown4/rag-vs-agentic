@@ -133,7 +133,7 @@ with st.sidebar:
         _u = getattr(st, "user", None) or getattr(st, "experimental_user", None)
         if _u and getattr(_u, "is_logged_in", False):
             st.caption(f"👤 {_u.email}")
-            if st.button("Sign out", use_container_width=True):
+            if st.button("Sign out", width='stretch'):
                 st.logout()
             st.divider()
 
@@ -158,7 +158,7 @@ with st.sidebar:
 
                     # Add new email
                     new_email = st.text_input("Add email", placeholder="user@example.com", key="new_email_input", label_visibility="collapsed")
-                    if st.button("Add", use_container_width=True) and new_email.strip():
+                    if st.button("Add", width='stretch') and new_email.strip():
                         updated = list(set(dynamic_emails + [new_email.strip().lower()]))
                         _save_dynamic_emails(updated)
                         st.success(f"Added {new_email.strip()}")
@@ -168,7 +168,7 @@ with st.sidebar:
 
                     st.divider()
                     st.markdown("**Knowledge base**")
-                    if st.button("🔄 Refresh (re-ingest GitHub)", use_container_width=True):
+                    if st.button("🔄 Refresh (re-ingest GitHub)", width='stretch'):
                         from shared.vector_store import get_client, COLLECTION_NAME
                         try:
                             get_client().delete_collection(COLLECTION_NAME)
@@ -181,7 +181,7 @@ with st.sidebar:
                     st.markdown("**📋 Query Log**")
                     _qlog = load_query_log(20)
                     st.caption(f"{len(_qlog)} recent queries logged")
-                    if st.button("🗑️ Clear Log", use_container_width=True, key="clear_qlog"):
+                    if st.button("🗑️ Clear Log", width='stretch', key="clear_qlog"):
                         clear_query_log()
                         st.success("Log cleared")
                         st.rerun()
@@ -216,7 +216,7 @@ with st.sidebar:
     for tier, questions in sample_questions.items():
         st.subheader(tier)
         for q in questions:
-            if st.button(q, key=q, use_container_width=True):
+            if st.button(q, key=q, width='stretch'):
                 st.session_state["question"] = q
 
 # Main input
@@ -226,7 +226,7 @@ question = st.text_input(
     placeholder="e.g., What backend technologies has this developer used?",
 )
 
-if st.button("Compare", type="primary", use_container_width=True) and question:
+if st.button("Compare", type="primary", width='stretch') and question:
     # Run both pipelines and store results in session_state so they survive
     # Streamlit reruns (e.g. the file-watcher rerun triggered by log_query()).
     st.session_state.pop("compare_rag_error", None)

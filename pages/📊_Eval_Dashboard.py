@@ -237,7 +237,7 @@ def _render_scatter(df: pd.DataFrame):
             .properties(height=380)
             .interactive()
         )
-        st.altair_chart(chart, use_container_width=True)
+        st.altair_chart(chart, width='stretch')
     except ImportError:
         st.caption("Install `altair` to see the scatter chart.")
 
